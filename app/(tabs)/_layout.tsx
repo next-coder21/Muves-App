@@ -1,35 +1,131 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs } from "expo-router";
+import { Platform, StyleSheet, Text, View } from "react-native";
+import { BlurView } from "expo-blur";
+import { MaterialIcons } from "@expo/vector-icons";
+import { HapticTab } from "@/components/haptic-tab";
+import MiniPlayer from "@/components/MiniPlayer";
+import { usePlayer } from "@/context/PlayerContext";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+const LIME = "#C8FF00";
+const INACTIVE = "#555";
+const TAB_HEIGHT = Platform.OS === "ios" ? 85 : 65;
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+type IconName = React.ComponentProps<typeof MaterialIcons>["name"];
 
+function TabIcon({ icon, label, focused }: { icon: IconName; label: string; focused: boolean }) {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+    <View style={styles.tabSlot}>
+      {focused ? (
+        <View style={styles.activePill}>
+          <MaterialIcons name={icon} size={18} color="#000" />
+          <Text style={styles.activeLabel}>{label}</Text>
+        </View>
+      ) : (
+        <MaterialIcons name={icon} size={24} color={INACTIVE} />
+      )}
+    </View>
   );
 }
+
+function TabBarBackground() {
+  return (
+    <BlurView
+      intensity={50}
+      tint="dark"
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
+
+export default function TabLayout() {
+  const { currentSong } = usePlayer();
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarButton: HapticTab,
+          tabBarShowLabel: false,
+          tabBarStyle: {
+            height: TAB_HEIGHT,
+            backgroundColor: "rgba(13,13,13,0.85)",
+            borderTopColor: "rgba(255,255,255,0.08)",
+            borderTopWidth: 1,
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            elevation: 0,
+          },
+          tabBarBackground: () => <TabBarBackground />,
+        }}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon="home" label="Home" focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="explore"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon="search" label="Search" focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="library"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon="library-music" label="Library" focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon="account-circle" label="Profile" focused={focused} />
+            ),
+          }}
+        />
+      </Tabs>
+
+      {/* MiniPlayer sits above the tab bar when a song is playing */}
+      {currentSong && (
+        <View style={[styles.miniPlayerContainer, { bottom: TAB_HEIGHT }]}>
+          <MiniPlayer />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  tabSlot: {
+    width: 80,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: LIME,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    gap: 5,
+    maxWidth: 78,
+  },
+  activeLabel: { fontSize: 12, fontWeight: "800", color: "#000" },
+  miniPlayerContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+  },
+});

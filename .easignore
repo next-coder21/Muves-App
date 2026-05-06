@@ -1,0 +1,12 @@
+# Files that should NOT be uploaded to EAS Build servers.
+# Mirrors .gitignore plus a few large-but-noisy paths that may exist locally.
+node_modules/
+.expo/
+dist/
+android/build/
+ios/build/
+*.log
+*.zip
+*.apk
+*.aab
+.git/
