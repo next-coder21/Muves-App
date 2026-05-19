@@ -73,10 +73,11 @@ async function parseError(res: Response): Promise<{ message: string; payload: un
   if (!text) return { message: `Request failed (${res.status})`, payload: null };
   try {
     const json = JSON.parse(text);
-    const msg =
-      (typeof json === "object" && json !== null &&
-        ((json as any).error || (json as any).message)) ||
-      `Request failed (${res.status})`;
+    const j = json as Record<string, unknown>;
+    const msg = (
+      typeof json === "object" && json !== null &&
+      (typeof j.error === "string" ? j.error : typeof j.message === "string" ? j.message : null)
+    ) || `Request failed (${res.status})`;
     return { message: String(msg), payload: json };
   } catch {
     // Non-JSON body (HTML error page, plain text)
@@ -84,7 +85,7 @@ async function parseError(res: Response): Promise<{ message: string; payload: un
   }
 }
 
-export async function apiRequest<T = any>(url: string, opts: ApiOptions = {}): Promise<T> {
+export async function apiRequest<T = unknown>(url: string, opts: ApiOptions = {}): Promise<T> {
   const {
     method = "GET",
     body,

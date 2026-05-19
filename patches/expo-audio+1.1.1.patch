@@ -1,0 +1,38 @@
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+index 320062e..610c965 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioPlayer.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+@@ -103,6 +103,7 @@ class AudioPlayer(
+   fun setActiveForLockScreen(active: Boolean, metadata: Metadata? = null, options: AudioLockScreenOptions? = null) {
+     if (active) {
+       this.metadata = metadata
++      if (metadata != null) overrideExoPlayerMetadata(metadata)
+       AudioControlsService.setActivePlayer(context, this, metadata, options)
+     } else if (isActiveForLockScreen) {
+       AudioControlsService.setActivePlayer(context, null)
+@@ -112,10 +113,25 @@ class AudioPlayer(
+   fun updateLockScreenMetadata(metadata: Metadata) {
+     if (isActiveForLockScreen) {
+       this.metadata = metadata
++      overrideExoPlayerMetadata(metadata)
+       AudioControlsService.updateMetadata(this, metadata)
+     }
+   }
+ 
++  // Sets the ExoPlayer MediaItem's mediaMetadata to our provided values so the
++  // Android MediaSession (and therefore lock screen / notification) shows the
++  // correct song title and artist instead of ID3 tags read from the audio file.
++  private fun overrideExoPlayerMetadata(metadata: Metadata) {
++    val index = ref.currentMediaItemIndex
++    val mediaItem = ref.currentMediaItem ?: return
++    val exoMeta = androidx.media3.common.MediaMetadata.Builder()
++      .setTitle(metadata.title)
++      .setArtist(metadata.artist)
++      .setAlbumTitle(metadata.albumTitle)
++      .build()
++    ref.replaceMediaItem(index, mediaItem.buildUpon().setMediaMetadata(exoMeta).build())
++  }
++
+   fun clearLockScreenControls() {
+     if (isActiveForLockScreen) {
+       AudioControlsService.setActivePlayer(context, null)

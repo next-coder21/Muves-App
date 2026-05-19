@@ -8,6 +8,7 @@ import {
 } from "expo-audio";
 import { API } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
+import { resolveLocalPath } from "@/context/LocalSongsContext";
 
 export type Song = {
   _id: string;
@@ -20,6 +21,7 @@ export type Song = {
   genre?: string;
   playCount?: number;
   lyrics?: string;
+  localPath?: string; // file:// URI when downloaded for offline
 };
 
 type PlayerContextType = {
@@ -49,6 +51,34 @@ const PlayerContext = createContext<PlayerContextType | null>(null);
 
 const HISTORY_LIMIT = 50;
 
+// Applies now-playing metadata to the lock screen / notification.
+// Uses updateLockScreenMetadata (dedicated override API) after activating
+// the session. Called multiple times with increasing delays because Android's
+// ExoPlayer reads ID3 tags from the audio stream asynchronously and keeps
+// overwriting MediaSession as new chunks arrive.
+function buildMeta(song: Song) {
+  return {
+    title: song.title,
+    artist: song.artist,
+    albumTitle: song.album ?? "",
+    // Local songs use a MediaLibrary asset ID for _id, not a server object ID,
+    // so attempting to fetch cover art from the server using that ID would 404.
+    // Only build a cover URL when the song has no local file (i.e. it is a
+    // server-side song whose _id is a valid MongoDB ObjectId).
+    artworkUrl: !song.localPath && song._id
+      ? `${API.COVER_URL}/${encodeURIComponent(song._id)}`
+      : undefined,
+  };
+}
+
+function applyLockScreenMeta(player: AudioPlayer, song: Song) {
+  try {
+    const meta = buildMeta(song);
+    player.setActiveForLockScreen(true, meta);
+    player.updateLockScreenMetadata(meta);
+  } catch { /* best-effort */ }
+}
+
 // Pure Fisher-Yates avoids the bias of [..arr].sort(() => Math.random() - 0.5)
 function pickRandomIndex(length: number, exclude: number): number {
   if (length <= 1) return 0;
@@ -74,6 +104,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const playerRef = useRef<AudioPlayer | null>(null);
+  // Stores all pending lock-screen metadata retry timers so every timer fired
+  // for the previous song can be cancelled before the next song starts.
+  const metaTimerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const currentSongRef = useRef<Song | null>(null);
   const queueIndexRef = useRef(0);
   const isRepeatRef = useRef(false);
@@ -130,19 +163,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           setIsLoading(false);
           setError(null);
 
-          // Re-apply lock screen metadata after source is ready — Android's
-          // MediaSession resets to "Unknown" defaults when a new source loads,
-          // overwriting whatever was set right after replace().
+          // Re-apply lock screen metadata at 200ms, 800ms, and 2000ms.
+          // ExoPlayer reads ID3 tags from the stream asynchronously in
+          // multiple passes as chunks arrive — a single delayed call isn't
+          // enough. Three retries across 2 s covers the full buffering window.
           if (song) {
-            try {
-              const meta: Parameters<AudioPlayer["setActiveForLockScreen"]>[1] = {
-                title: song.title,
-                artist: song.artist,
-                albumTitle: song.album ?? "",
-              };
-              if (song._id) (meta as any).artworkUrl = `${API.COVER_URL}/${encodeURIComponent(song._id)}`;
-              player.setActiveForLockScreen(true, meta);
-            } catch { /* best-effort */ }
+            applyLockScreenMeta(player, song);
+            const snapId = loadIdRef.current;
+            // Cancel any pending retries from the previous song before
+            // scheduling new ones, so stale timers don't overwrite the
+            // lock screen metadata of the song that just started.
+            metaTimerRef.current.forEach(clearTimeout);
+            metaTimerRef.current = [200, 800, 2000].map(delay =>
+              setTimeout(() => {
+                if (loadIdRef.current !== snapId) return;
+                const current = currentSongRef.current;
+                if (current) applyLockScreenMeta(player, current);
+              }, delay)
+            );
           }
         }
         // else: still buffering the new source — keep isLoading true
@@ -180,6 +218,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
+      metaTimerRef.current.forEach(clearTimeout);
+      metaTimerRef.current = [];
       try { sub?.remove?.(); } catch { /* listener already gone */ }
       try { player.remove(); } catch { /* player already disposed */ }
       playerRef.current = null;
@@ -212,11 +252,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Always use the server streaming proxy — it handles Google Drive token
-      // resolution, range requests, and caching. Direct audioUrl (Drive links)
-      // require a confirmation flow the native player cannot complete.
-      const uri = `${API.STREAM_URL}/${encodeURIComponent(song._id)}`;
-      const headers: Record<string, string> = tokenRef.current
+      // Use the local downloaded file if available — no network needed.
+      // Otherwise fall back to the server streaming proxy which handles
+      // Google Drive token resolution, range requests, and caching.
+      const localPath = song.localPath ?? resolveLocalPath(song._id);
+      const uri = localPath ?? `${API.STREAM_URL}/${encodeURIComponent(song._id)}`;
+      const headers: Record<string, string> = !localPath && tokenRef.current
         ? { Authorization: `Bearer ${tokenRef.current}` }
         : {};
 
@@ -226,19 +267,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       player.replace({ uri, headers });
       player.play();
 
-      // Update lock screen / now-playing controls. Only pass artworkUrl when
-      // we have one — empty strings can crash some native implementations.
-      try {
-        const meta: Parameters<AudioPlayer["setActiveForLockScreen"]>[1] = {
-          title: song.title,
-          artist: song.artist,
-          albumTitle: song.album ?? "",
-        };
-        if (song._id) (meta as any).artworkUrl = `${API.COVER_URL}/${encodeURIComponent(song._id)}`;
-        player.setActiveForLockScreen(true, meta);
-      } catch {
-        // Lock screen metadata is best-effort; don't crash if it fails
-      }
+      // Set lock screen / notification metadata immediately.
+      // A delayed re-apply fires from the status listener once the source
+      // is loaded, overriding any ID3 tags ExoPlayer reads from the stream.
+      applyLockScreenMeta(player, song);
     } catch (e) {
       if (myId === loadIdRef.current) {
         console.error("Audio load failed:", e);
@@ -310,9 +342,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const next = useCallback(() => {
     const q = queueRef.current;
     if (!q.length) return;
-    const idx = isShuffleRef.current
-      ? pickRandomIndex(q.length, queueIndexRef.current)
-      : (queueIndexRef.current + 1) % q.length;
+    let idx: number;
+    if (isShuffleRef.current) {
+      idx = pickRandomIndex(q.length, queueIndexRef.current);
+    } else {
+      const nextIdx = queueIndexRef.current + 1;
+      // Stop at queue end (no wrap) — consistent with the auto-advance behaviour
+      // in the didJustFinish handler so pressing next at the last song feels the
+      // same as letting the last song finish naturally.
+      if (nextIdx >= q.length) {
+        playerRef.current?.pause();
+        setIsPlaying(false);
+        return;
+      }
+      idx = nextIdx;
+    }
     queueIndexRef.current = idx;
     pushHistory(q[idx]);
     _loadAndPlay(q[idx]);

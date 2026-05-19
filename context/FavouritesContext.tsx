@@ -67,7 +67,11 @@ export function FavouritesProvider({ children }: { children: React.ReactNode }) 
       })
       .catch(() => {});
     loadFavourites();
-  }, [user?.email, loadFavourites, user]);
+  // user?.email is the identity key; the full `user` object is intentionally
+  // omitted — including it would re-run on every profile update (e.g. updateUser)
+  // and trigger a spurious server reload even though the identity hasn't changed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email, loadFavourites]);
 
   // Clear in-memory state on logout. The cache file remains so the same user
   // signing back in still has a fast first paint.

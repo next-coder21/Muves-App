@@ -4,6 +4,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -35,21 +36,31 @@ export default function AlbumScreen() {
   const { isFavourite, toggleFavourite } = useFavourites();
   const bottomInset = usePlayerInset();
 
+  const { top: topInset } = useSafeAreaInsets();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
+    const ctrl = new AbortController();
     setLoading(true);
-    get<any>(API.ALBUM_SONGS(id))
-      .then(d => { setSongs(normalizeSongs(d)); setError(null); })
-      .catch(() => setError("Failed to load album songs."))
-      .finally(() => setLoading(false));
-  }, [id]);
+    get<unknown>(API.ALBUM_SONGS(id), { signal: ctrl.signal })
+      .then(d => {
+        if (ctrl.signal.aborted) return;
+        setSongs(normalizeSongs(d));
+        setError(null);
+      })
+      .catch((e: unknown) => {
+        if ((e as { name?: string })?.name === "AbortError") return;
+        setError("Failed to load album songs.");
+      })
+      .finally(() => { if (!ctrl.signal.aborted) setLoading(false); });
+    return () => ctrl.abort();
+  }, [id, get]);
 
   const albumCover  = songs[0]?.coverImage ?? null;
-  const albumTitle  = (songs[0] as any)?.album  ?? "Album";
+  const albumTitle  = songs[0]?.album ?? "Album";
   const albumArtist = songs[0]?.artist ?? "";
 
   function playAll() {
@@ -64,7 +75,7 @@ export default function AlbumScreen() {
       <LinearGradient colors={["#111100", "#0d0d0d"]} style={StyleSheet.absoluteFill} />
 
       {/* Back */}
-      <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={10}>
+      <Pressable style={[styles.backBtn, { top: topInset + 8 }]} onPress={() => router.back()} hitSlop={10}>
         <MaterialIcons name="arrow-back-ios" size={24} color={TEXT} />
       </Pressable>
 
@@ -146,7 +157,7 @@ export default function AlbumScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
 
-  backBtn: { position: "absolute", top: 52, left: 16, zIndex: 10, padding: 6 },
+  backBtn: { position: "absolute", left: 16, zIndex: 10, padding: 6 },
   backIcon: { fontSize: 34, color: TEXT, lineHeight: 34 },
 
   hero: { alignItems: "center", paddingTop: 100, paddingBottom: 32, paddingHorizontal: 24 },

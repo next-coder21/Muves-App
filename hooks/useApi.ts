@@ -9,25 +9,25 @@ export function useApi() {
   const { token } = useAuth();
 
   const get = useCallback(
-    <T = any>(url: string, opts: Omit<ApiOptions, "method" | "body" | "token"> = {}) =>
+    <T = unknown>(url: string, opts: Omit<ApiOptions, "method" | "body" | "token"> = {}) =>
       apiRequest<T>(url, { ...opts, method: "GET", token }),
     [token]
   );
 
   const post = useCallback(
-    <T = any>(url: string, body?: unknown, opts: Omit<ApiOptions, "method" | "body" | "token"> = {}) =>
+    <T = unknown>(url: string, body?: unknown, opts: Omit<ApiOptions, "method" | "body" | "token"> = {}) =>
       apiRequest<T>(url, { ...opts, method: "POST", body, token }),
     [token]
   );
 
   const patch = useCallback(
-    <T = any>(url: string, body?: unknown, opts: Omit<ApiOptions, "method" | "body" | "token"> = {}) =>
+    <T = unknown>(url: string, body?: unknown, opts: Omit<ApiOptions, "method" | "body" | "token"> = {}) =>
       apiRequest<T>(url, { ...opts, method: "PATCH", body, token }),
     [token]
   );
 
   const del = useCallback(
-    <T = any>(url: string, opts: Omit<ApiOptions, "method" | "body" | "token"> = {}) =>
+    <T = unknown>(url: string, opts: Omit<ApiOptions, "method" | "body" | "token"> = {}) =>
       apiRequest<T>(url, { ...opts, method: "DELETE", token }),
     [token]
   );

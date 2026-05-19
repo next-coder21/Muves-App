@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ActivityIndicator, Alert, Image, Pressable,
   RefreshControl, ScrollView, StyleSheet, Text, View,
@@ -7,6 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlaylists } from "@/context/PlaylistContext";
 import { useFavourites } from "@/context/FavouritesContext";
 import { usePlayer, Song } from "@/context/PlayerContext";
@@ -35,6 +36,7 @@ function fmtTotal(seconds: number) {
 export default function PlaylistDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router  = useRouter();
+  const { top: topInset } = useSafeAreaInsets();
   const { playlists, getPlaylistSongs, removeSongFromPlaylist, deletePlaylist } = usePlaylists();
   const { isFavourite, toggleFavourite } = useFavourites();
   const { playSong, currentSong, isPlaying } = usePlayer();
@@ -133,7 +135,7 @@ export default function PlaylistDetailScreen() {
         }
       >
         {/* ── Header ── */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: topInset + 8 }]}>
           <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.5 }]}>
             <MaterialIcons name="arrow-back-ios" size={22} color="#f5f5f5" />
           </Pressable>
@@ -268,7 +270,7 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 8,
+    paddingHorizontal: 16, paddingBottom: 8,
   },
   backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   backIcon: { fontSize: 32, color: TEXT, fontWeight: "300" },
@@ -295,6 +297,7 @@ const styles = StyleSheet.create({
   playBtnIcon: { fontSize: 14, color: "#000" },
   playBtnText: { fontSize: 15, fontWeight: "800", color: "#000" },
   shuffleBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
     paddingHorizontal: 22, paddingVertical: 13,
     borderRadius: 30, borderWidth: 1, borderColor: BORDER,
     backgroundColor: "rgba(255,255,255,0.06)",

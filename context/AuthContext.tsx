@@ -91,6 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setAuthErrorHandler(null);
   }, [logout]);
 
+  // Tracks whether the AuthProvider is still mounted so async callbacks
+  // from checkAuth don't call setState after the component is unmounted.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   useEffect(() => {
     checkAuth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,6 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.getItem(USER_KEY),
       ]);
 
+      if (!mountedRef.current) return;
+
       if (!storedToken) {
         setLoading(false);
         return;
@@ -114,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedUser) {
         try {
           setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+          setUser(JSON.parse(storedUser) as User);
         } catch {
           // Corrupt cached user — clear it; server check below will repopulate
           await AsyncStorage.removeItem(USER_KEY).catch(() => {});
@@ -132,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           timeoutMs: CHECK_AUTH_TIMEOUT_MS,
           skipAuthErrorHook: true,
         });
+        if (!mountedRef.current) return;
         const freshUser = (data as { user?: User })?.user ?? (data as User);
         if (freshUser && (freshUser as User).email) {
           setToken(storedToken);
@@ -139,6 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await AsyncStorage.setItem(USER_KEY, JSON.stringify(freshUser)).catch(() => {});
         }
       } catch (err) {
+        if (!mountedRef.current) return;
         if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           // Token is invalid/expired — clear everything
           await Promise.all([
@@ -153,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // isn't logged out offline. They'll hit a fresh check on next launch.
       }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 

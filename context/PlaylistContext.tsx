@@ -29,7 +29,7 @@ const PlaylistContext = createContext<PlaylistContextType | null>(null);
 const cacheKey = (email?: string | null) =>
   email ? `muves_playlists:${email.toLowerCase()}` : "muves_playlists:_anon";
 
-function normalizePlaylist(raw: any): Playlist {
+function normalizePlaylist(raw: Record<string, unknown>): Playlist {
   return {
     id:        String(raw?.id ?? raw?._id ?? ""),
     name:      typeof raw?.name === "string" && raw.name ? raw.name : "Untitled",
@@ -56,9 +56,9 @@ export function PlaylistProvider({ children }: { children: React.ReactNode }) {
     const email = user?.email;
     setLoading(true);
     try {
-      const data = await apiRequest<any>(API.PLAYLISTS, { token });
+      const data = await apiRequest<unknown>(API.PLAYLISTS, { token });
       if (myId !== loadIdRef.current) return;
-      const arr: Playlist[] = (Array.isArray(data) ? data : [])
+      const arr: Playlist[] = (Array.isArray(data) ? data as Record<string, unknown>[] : [])
         .map(normalizePlaylist)
         .filter(p => p.id);
       setPlaylists(arr);
@@ -86,7 +86,10 @@ export function PlaylistProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {});
     loadPlaylists();
-  }, [user?.email, loadPlaylists, user]);
+  // user?.email is the identity key; the full `user` object is intentionally
+  // omitted to avoid re-running on every profile update (e.g. updateUser).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email, loadPlaylists]);
 
   useEffect(() => {
     return registerLogoutHandler(() => {
@@ -98,7 +101,7 @@ export function PlaylistProvider({ children }: { children: React.ReactNode }) {
   const createPlaylist = useCallback(async (name: string): Promise<Playlist> => {
     const trimmed = name.trim();
     if (!trimmed) throw new Error("Playlist name is required");
-    const data = await apiRequest<any>(API.PLAYLISTS, {
+    const data = await apiRequest<Record<string, unknown>>(API.PLAYLISTS, {
       method: "POST",
       body: { name: trimmed },
       token,
@@ -164,9 +167,9 @@ export function PlaylistProvider({ children }: { children: React.ReactNode }) {
   }, [token, user?.email, persist]);
 
   const getPlaylistSongs = useCallback(async (playlistId: string): Promise<Song[]> => {
-    if (!playlistId) return [];
-    const data = await apiRequest<any>(API.PLAYLIST_SONGS(playlistId), { token });
-    return (Array.isArray(data) ? data : []).map(normalizeSong);
+    if (!playlistId || !token) return [];
+    const data = await apiRequest<unknown>(API.PLAYLIST_SONGS(playlistId), { token });
+    return (Array.isArray(data) ? data as Record<string, unknown>[] : []).map(normalizeSong);
   }, [token]);
 
   return (

@@ -3,6 +3,7 @@ import {
   ScrollView, StyleSheet, Text, View,
 } from "react-native";
 import { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -30,16 +31,19 @@ export default function ArtistsScreen() {
   const { get } = useApi();
   const router = useRouter();
   const bottomInset = usePlayerInset();
+  const { top: topInset } = useSafeAreaInsets();
 
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    get<any>(API.ARTISTS_URL)
-      .then(d => setArtists(normalizeArtists(d)))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    const ctrl = new AbortController();
+    get<unknown>(API.ARTISTS_URL, { signal: ctrl.signal })
+      .then(d => { if (!ctrl.signal.aborted) setArtists(normalizeArtists(d)); })
+      .catch((e: unknown) => { if ((e as { name?: string })?.name === "AbortError") return; })
+      .finally(() => { if (!ctrl.signal.aborted) setLoading(false); });
+    return () => ctrl.abort();
+  }, [get]);
 
   return (
     <View style={styles.container}>
@@ -47,7 +51,7 @@ export default function ArtistsScreen() {
       <LinearGradient colors={["#111100", "#0d0d0d"]} style={StyleSheet.absoluteFill} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topInset + 8 }]}>
         <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={10}>
           <MaterialIcons name="arrow-back-ios" size={24} color={TEXT} />
         </Pressable>
@@ -73,7 +77,7 @@ export default function ArtistsScreen() {
             <Pressable
               key={artist._id ?? String(i)}
               style={({ pressed }) => [styles.artistCard, pressed && { opacity: 0.75 }]}
-              onPress={() => router.push(`/(tabs)/explore?artist=${encodeURIComponent(artist.name)}` as any)}
+              onPress={() => router.push(`/(tabs)/explore?artist=${encodeURIComponent(artist.name)}`)}
             >
               <View style={styles.artistImg}>
                 {artist.image ? (
@@ -110,7 +114,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 52,
     paddingBottom: 16,
   },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },

@@ -5,14 +5,15 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { HapticTab } from "@/components/haptic-tab";
 import MiniPlayer from "@/components/MiniPlayer";
 import { usePlayer } from "@/context/PlayerContext";
+import { useColors } from "@/context/ThemeContext";
 
 const LIME = "#C8FF00";
-const INACTIVE = "#555";
 const TAB_HEIGHT = Platform.OS === "ios" ? 85 : 65;
 
 type IconName = React.ComponentProps<typeof MaterialIcons>["name"];
 
 function TabIcon({ icon, label, focused }: { icon: IconName; label: string; focused: boolean }) {
+  const c = useColors();
   return (
     <View style={styles.tabSlot}>
       {focused ? (
@@ -21,24 +22,20 @@ function TabIcon({ icon, label, focused }: { icon: IconName; label: string; focu
           <Text style={styles.activeLabel}>{label}</Text>
         </View>
       ) : (
-        <MaterialIcons name={icon} size={24} color={INACTIVE} />
+        <MaterialIcons name={icon} size={24} color={c.muted} />
       )}
     </View>
   );
 }
 
 function TabBarBackground() {
-  return (
-    <BlurView
-      intensity={50}
-      tint="dark"
-      style={StyleSheet.absoluteFill}
-    />
-  );
+  const c = useColors();
+  return <BlurView intensity={50} tint={c.tint} style={StyleSheet.absoluteFill} />;
 }
 
 export default function TabLayout() {
   const { currentSong } = usePlayer();
+  const c = useColors();
 
   return (
     <View style={{ flex: 1 }}>
@@ -49,8 +46,8 @@ export default function TabLayout() {
           tabBarShowLabel: false,
           tabBarStyle: {
             height: TAB_HEIGHT,
-            backgroundColor: "rgba(13,13,13,0.85)",
-            borderTopColor: "rgba(255,255,255,0.08)",
+            backgroundColor: c.isDark ? "rgba(13,13,13,0.85)" : "rgba(245,245,245,0.85)",
+            borderTopColor: c.cardBorder,
             borderTopWidth: 1,
             position: "absolute",
             bottom: 0,

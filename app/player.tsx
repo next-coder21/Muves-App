@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -212,6 +213,7 @@ export default function PlayerScreen() {
   const { get } = useApi();
   const { isFavourite, toggleFavourite } = useFavourites();
   const router = useRouter();
+  const { top: topInset } = useSafeAreaInsets();
 
   const liked = currentSong ? isFavourite(currentSong._id) : false;
   const [showPlaylistSheet, setShowPlaylistSheet] = useState(false);
@@ -237,10 +239,11 @@ export default function PlayerScreen() {
     // Capture the song ID so the async callback can verify the song
     // hasn't changed before applying its result (prevents stale overwrites).
     const forId = currentSong._id;
+    const ctrl = new AbortController();
 
-    get(API.LYRICS_URL(currentSong._id))
+    get(API.LYRICS_URL(currentSong._id), { signal: ctrl.signal })
       .then((data: unknown) => {
-        if (fetchedFor.current !== forId) return; // song changed while fetching
+        if (ctrl.signal.aborted || fetchedFor.current !== forId) return;
         const parsed = parseLyricsData(data);
         if (parsed) {
           setLyrics(parsed);
@@ -252,14 +255,16 @@ export default function PlayerScreen() {
         }
       })
       .catch(() => {
-        if (fetchedFor.current !== forId) return;
+        if (ctrl.signal.aborted || fetchedFor.current !== forId) return;
         setHasLyrics(false);
         setTab("queue");
       })
       .finally(() => {
-        if (fetchedFor.current === forId) setLyricsLoading(false);
+        if (!ctrl.signal.aborted && fetchedFor.current === forId) setLyricsLoading(false);
       });
-  }, [currentSong?._id]);
+
+    return () => ctrl.abort();
+  }, [currentSong?._id, get]);
 
   function onBarLayout(e: LayoutChangeEvent) {
     barWidth.current = e.nativeEvent.layout.width;
@@ -279,7 +284,7 @@ export default function PlayerScreen() {
 
   if (!currentSong) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center", paddingTop: topInset }]}>
         <StatusBar style="light" />
         <MaterialIcons name="music-off" size={52} color={MUTED} style={{ marginBottom: 16 }} />
         <Text style={{ color: TEXT, fontSize: 18, fontWeight: "700" }}>Nothing playing</Text>
@@ -304,7 +309,7 @@ export default function PlayerScreen() {
       />
 
       {/* ── Header ── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topInset + 8 }]}>
         <Pressable style={({ pressed }) => [styles.headerSideBtn, pressed && { opacity: 0.5 }]} onPress={() => router.back()}>
           <MaterialIcons name="keyboard-arrow-down" size={32} color={TEXT} />
         </Pressable>
@@ -375,7 +380,7 @@ export default function PlayerScreen() {
       <View style={styles.progressSection}>
         <Pressable style={styles.progressTrack} onLayout={onBarLayout} onPress={onBarPress}>
           <View style={styles.progressBg} />
-          <View style={[styles.progressFill, { width: `${(progress * 100).toFixed(2)}%` as any }]}>
+          <View style={[styles.progressFill, { width: `${(progress * 100).toFixed(2)}%` as `${number}%` }]}>
             <View style={styles.progressThumb} />
           </View>
         </Pressable>
@@ -470,7 +475,7 @@ const styles = StyleSheet.create({
   // Header
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 8,
+    paddingHorizontal: 16, paddingBottom: 8,
   },
   headerSideBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   headerSideIcon: { fontSize: 28, color: TEXT, fontWeight: "300" },
