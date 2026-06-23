@@ -515,7 +515,7 @@ export default function PlayerScreen() {
 
   if (!currentSong || !displayedSong) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+      <View style={{ flex: 1, backgroundColor: P.bg, justifyContent: "center", alignItems: "center" }}>
         <StatusBar style="dark" />
         <MaterialIcons name="music-off" size={52} color={P.sub} style={{ marginBottom: 16 }} />
         <Text style={{ color: P.text, fontSize: 18, fontWeight: "700" }}>Nothing playing</Text>
@@ -529,8 +529,14 @@ export default function PlayerScreen() {
   const pct = Math.round(progress * 100);
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: P.bg }}>
       <StatusBar style="dark" />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
 
       {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: topInset + 10 }]}>
@@ -650,6 +656,8 @@ export default function PlayerScreen() {
         </Pressable>
       </View>
 
+      </ScrollView>
+
       <AddToPlaylistSheet
         visible={showPlaylistSheet}
         songId={currentSong._id}
@@ -669,8 +677,6 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: P.bg },
-
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 14 },
   backCircle: {
     width: 40, height: 40, borderRadius: 20, backgroundColor: P.red,
