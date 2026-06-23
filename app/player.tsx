@@ -3,10 +3,10 @@ import {
   Alert,
   Animated,
   Dimensions,
-  GestureResponderEvent,
   Image,
   LayoutChangeEvent,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -27,14 +27,14 @@ import { API } from "@/constants/api";
 import AddToPlaylistSheet from "@/components/AddToPlaylistSheet";
 
 const P = {
-  bg:         "#F5F5F5",
-  surface:    "#FFFFFF",
-  red:        "#E53935",
-  redLight:   "#FDECEA",
-  text:       "#1A1A1A",
-  sub:        "#9E9E9E",
-  border:     "#EEEEEE",
-  waveInactive: "#E0E0E0",
+  bg:           "#F5F5F5",
+  surface:      "#FFFFFF",
+  red:          "#E53935",
+  redLight:     "#FDECEA",
+  text:         "#1A1A1A",
+  sub:          "#9E9E9E",
+  border:       "#EEEEEE",
+  trackInactive:"#E0E0E0",
 };
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
@@ -62,38 +62,29 @@ function FanArtwork({
     <View style={fanStyles.container}>
       <View style={fanStyles.sideWrap} pointerEvents="none">
         <View style={[fanStyles.sideCard, fanStyles.leftCard]}>
-          {leftSong.coverImage ? (
-            <Image source={{ uri: leftSong.coverImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, fanStyles.noArt]}>
-              <MaterialIcons name="music-note" size={28} color={P.sub} />
-            </View>
-          )}
+          {leftSong.coverImage
+            ? <Image source={{ uri: leftSong.coverImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            : <View style={[StyleSheet.absoluteFill, fanStyles.noArt]}><MaterialIcons name="music-note" size={28} color={P.sub} /></View>
+          }
           <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,255,255,0.35)" }]} />
         </View>
       </View>
 
       <Animated.View style={[fanStyles.centerWrap, { transform: [{ scale: scaleAnim }] }]}>
         <View style={fanStyles.centerCard}>
-          {current.coverImage ? (
-            <Image source={{ uri: current.coverImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, fanStyles.noArt]}>
-              <MaterialIcons name="music-note" size={56} color={P.red + "88"} />
-            </View>
-          )}
+          {current.coverImage
+            ? <Image source={{ uri: current.coverImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            : <View style={[StyleSheet.absoluteFill, fanStyles.noArt]}><MaterialIcons name="music-note" size={56} color={P.red + "88"} /></View>
+          }
         </View>
       </Animated.View>
 
       <View style={fanStyles.sideWrap} pointerEvents="none">
         <View style={[fanStyles.sideCard, fanStyles.rightCard]}>
-          {rightSong.coverImage ? (
-            <Image source={{ uri: rightSong.coverImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, fanStyles.noArt]}>
-              <MaterialIcons name="music-note" size={28} color={P.sub} />
-            </View>
-          )}
+          {rightSong.coverImage
+            ? <Image source={{ uri: rightSong.coverImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            : <View style={[StyleSheet.absoluteFill, fanStyles.noArt]}><MaterialIcons name="music-note" size={28} color={P.sub} /></View>
+          }
           <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,255,255,0.35)" }]} />
         </View>
       </View>
@@ -105,9 +96,9 @@ const fanStyles = StyleSheet.create({
   container: {
     width: SCREEN_W, height: FAN_H,
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  sideWrap: { position: "absolute", zIndex: 0 },
+  sideWrap:   { position: "absolute", zIndex: 0 },
   sideCard: {
     width: SIDE_ART, height: SIDE_ART, borderRadius: 18,
     overflow: "hidden", backgroundColor: "#E0E0E0",
@@ -126,142 +117,78 @@ const fanStyles = StyleSheet.create({
     }),
   },
   centerCard: { width: CENTER_ART, height: CENTER_ART, borderRadius: 22, overflow: "hidden", backgroundColor: "#E8E8E8" },
-  noArt: { alignItems: "center", justifyContent: "center", backgroundColor: "#F0F0F0" },
+  noArt:      { alignItems: "center", justifyContent: "center", backgroundColor: "#F0F0F0" },
 });
 
-// ─── Animated wave seek bar ───────────────────────────────────────────────────
-const WAVE_SEGS = 80;
-const WAVE_H    = 52;
-const WAVE_CY   = WAVE_H / 2;
-const WAVE_AMP  = 11;
-const LINE_W    = 2.5;
-const DOT_R     = 5.5;
+// ─── Flat seek bar ─────────────────────────────────────────────────────────────
+const THUMB_R = 7;
 
-type WavePt = { x: number; y: number };
+function SeekBar({ progress, onSeek }: { progress: number; onSeek: (r: number) => void }) {
+  const widthRef  = useRef(0);
+  const offsetRef = useRef(0);
 
-function buildWave(w: number, amp: number, phase: number): WavePt[] {
-  return Array.from({ length: WAVE_SEGS }, (_, i) => {
-    const t = i / (WAVE_SEGS - 1);
-    return {
-      x: t * w,
-      y: WAVE_CY - Math.sin(t * Math.PI * 6 + phase) * amp,
-    };
-  });
-}
+  const clamp = (pageX: number) =>
+    Math.max(0, Math.min(1, (pageX - offsetRef.current) / widthRef.current));
 
-function WaveSeekBar({
-  progress, onSeek, isPlaying,
-}: {
-  progress: number; onSeek: (r: number) => void; isPlaying: boolean;
-}) {
-  const phaseRef = useRef(0);
-  const ampRef   = useRef(0);
-  const widthRef = useRef(0);
-  const [livePts, setLivePts]     = useState<WavePt[]>([]);
-  const [frozenPts, setFrozenPts] = useState<WavePt[]>([]);
-  const frozenBuilt = useRef(false);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      const target = isPlaying ? 1 : 0;
-      ampRef.current += (target - ampRef.current) * 0.09;
-      if (isPlaying) phaseRef.current += 0.07;
-
-      const w = widthRef.current;
-      if (w <= 0) return;
-
-      if (!frozenBuilt.current) {
-        frozenBuilt.current = true;
-        setFrozenPts(buildWave(w, WAVE_AMP, 0));
-      }
-
-      setLivePts(buildWave(w, ampRef.current * WAVE_AMP, phaseRef.current));
-    }, 16);
-
-    return () => clearInterval(id);
-  }, [isPlaying]);
-
-  function handlePress(e: GestureResponderEvent) {
-    const w = widthRef.current;
-    if (!w) return;
-    onSeek(Math.max(0, Math.min(1, e.nativeEvent.locationX / w)));
-  }
-
-  const segW       = widthRef.current / (WAVE_SEGS - 1);
-  const closestIdx = segW > 0
-    ? Math.max(0, Math.min(WAVE_SEGS - 1, Math.round((progress * widthRef.current) / segW)))
-    : 0;
-  const dotPt = livePts[closestIdx] ?? { x: progress * widthRef.current, y: WAVE_CY };
-
-  function renderSegments(pts: WavePt[], color: string, opacity: number) {
-    if (pts.length < 2) return null;
-    return pts.slice(0, -1).map((p1, i) => {
-      const p2  = pts[i + 1];
-      const dx  = p2.x - p1.x;
-      const dy  = p2.y - p1.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      const ang = Math.atan2(dy, dx) * (180 / Math.PI);
-      return (
-        <View
-          key={i}
-          style={{
-            position:        "absolute",
-            width:           len + 0.5,
-            height:          LINE_W,
-            borderRadius:    LINE_W / 2,
-            backgroundColor: color,
-            opacity,
-            left:            (p1.x + p2.x) / 2 - (len + 0.5) / 2,
-            top:             (p1.y + p2.y) / 2 - LINE_W / 2,
-            transform:       [{ rotate: `${ang}deg` }],
-          }}
-        />
-      );
-    });
-  }
-
-  const splitIdx  = Math.round(progress * (WAVE_SEGS - 1));
-  const playedPts = frozenPts.slice(0, splitIdx + 1);
-  const aheadPts  = livePts.slice(splitIdx);
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder:  () => true,
+      onPanResponderGrant: (e) => {
+        offsetRef.current = e.nativeEvent.pageX - e.nativeEvent.locationX;
+        onSeek(clamp(e.nativeEvent.pageX));
+      },
+      onPanResponderMove: (e) => {
+        onSeek(clamp(e.nativeEvent.pageX));
+      },
+    })
+  ).current;
 
   return (
-    <Pressable
-      onPress={handlePress}
-      onLayout={(e: LayoutChangeEvent) => {
-        const w = e.nativeEvent.layout.width;
-        widthRef.current = w;
-        frozenBuilt.current = false;
-      }}
-      style={waveStyles.container}
+    <View
+      style={seekStyles.container}
+      onLayout={(e: LayoutChangeEvent) => { widthRef.current = e.nativeEvent.layout.width; }}
+      {...pan.panHandlers}
     >
-      <View style={waveStyles.track}>
-        {renderSegments(playedPts, P.red, 0.9)}
-        {renderSegments(aheadPts, P.waveInactive, 0.6)}
-        {widthRef.current > 0 && livePts.length > 0 && (
-          <View
-            style={[
-              waveStyles.progDot,
-              { left: dotPt.x - DOT_R, top: dotPt.y - DOT_R },
-            ]}
-          />
-        )}
+      {/* track */}
+      <View style={seekStyles.track}>
+        <View style={[seekStyles.fill, { width: `${progress * 100}%` as `${number}%` }]} />
       </View>
-    </Pressable>
+      {/* thumb */}
+      <View style={[seekStyles.thumb, { left: `${progress * 100}%` as `${number}%` }]} />
+    </View>
   );
 }
 
-const waveStyles = StyleSheet.create({
-  container: { paddingHorizontal: 28, paddingVertical: 8, marginBottom: 4 },
-  track:     { height: WAVE_H, position: "relative" },
-  progDot: {
-    position: "absolute",
-    width:    DOT_R * 2,
-    height:   DOT_R * 2,
-    borderRadius: DOT_R,
+const seekStyles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    justifyContent: "center",
+  },
+  track: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: P.trackInactive,
+    overflow: "hidden",
+  },
+  fill: {
+    height: 4,
+    borderRadius: 2,
     backgroundColor: P.red,
+  },
+  thumb: {
+    position: "absolute",
+    width:  THUMB_R * 2,
+    height: THUMB_R * 2,
+    borderRadius: THUMB_R,
+    backgroundColor: P.red,
+    top: "50%",
+    marginTop: -THUMB_R,
+    marginLeft: -THUMB_R,
     ...Platform.select({
-      ios:     { shadowColor: P.red, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.55, shadowRadius: 4 },
-      android: { elevation: 5 },
+      ios: { shadowColor: P.red, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4 },
+      android: { elevation: 4 },
     }),
   },
 });
@@ -313,13 +240,13 @@ function QueuePanel({ queue, currentSong, onPlay }: { queue: Song[]; currentSong
 }
 
 const qStyles = StyleSheet.create({
-  row:          { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 10, gap: 12, borderBottomWidth: 1, borderBottomColor: P.border },
-  rowActive:    { backgroundColor: "#FFF5F5" },
-  thumb:        { width: 42, height: 42, borderRadius: 10, overflow: "hidden", backgroundColor: "#F0F0F0" },
-  activeOverlay:{ ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(229,57,53,0.15)", alignItems: "center", justifyContent: "center" },
-  title:        { fontSize: 13, fontWeight: "700", color: P.text, marginBottom: 2 },
-  artist:       { fontSize: 11, color: P.sub },
-  dur:          { fontSize: 11, color: P.sub },
+  row:           { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 10, gap: 12, borderBottomWidth: 1, borderBottomColor: P.border },
+  rowActive:     { backgroundColor: "#FFF5F5" },
+  thumb:         { width: 42, height: 42, borderRadius: 10, overflow: "hidden", backgroundColor: "#F0F0F0" },
+  activeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(229,57,53,0.15)", alignItems: "center", justifyContent: "center" },
+  title:         { fontSize: 13, fontWeight: "700", color: P.text, marginBottom: 2 },
+  artist:        { fontSize: 11, color: P.sub },
+  dur:           { fontSize: 11, color: P.sub },
 });
 
 // ─── Queue bottom sheet ───────────────────────────────────────────────────────
@@ -338,18 +265,9 @@ function QueueSheet({
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 65,
-        friction: 11,
-      }).start();
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
     } else {
-      Animated.timing(translateY, {
-        toValue: SCREEN_H,
-        duration: 280,
-        useNativeDriver: true,
-      }).start(() => setMounted(false));
+      Animated.timing(translateY, { toValue: SCREEN_H, duration: 280, useNativeDriver: true }).start(() => setMounted(false));
     }
   }, [visible]);
 
@@ -370,11 +288,7 @@ function QueueSheet({
           </Pressable>
         </View>
         <View style={{ flex: 1 }}>
-          <QueuePanel
-            queue={queue}
-            currentSong={currentSong}
-            onPlay={(s) => { onPlay(s); onClose(); }}
-          />
+          <QueuePanel queue={queue} currentSong={currentSong} onPlay={(s) => { onPlay(s); onClose(); }} />
         </View>
       </Animated.View>
     </Modal>
@@ -382,38 +296,20 @@ function QueueSheet({
 }
 
 const sheetStyles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.35)" },
   sheet: {
-    position: "absolute",
-    bottom: 0, left: 0, right: 0,
+    position: "absolute", bottom: 0, left: 0, right: 0,
     height: SCREEN_H * 0.65,
     backgroundColor: P.surface,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    overflow: "hidden",
+    borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden",
     ...Platform.select({
       ios: { shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 16 },
       android: { elevation: 16 },
     }),
   },
-  handle: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: P.border,
-    alignSelf: "center",
-    marginTop: 12, marginBottom: 4,
-  },
-  header: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: P.border,
-  },
-  headerText: {
-    flex: 1,
-    fontSize: 13, fontWeight: "700",
-    color: P.sub,
-  },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: P.border, alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  header: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: P.border },
+  headerText: { flex: 1, fontSize: 13, fontWeight: "700", color: P.sub },
 });
 
 // ─── Lyrics parser ────────────────────────────────────────────────────────────
@@ -438,22 +334,21 @@ export default function PlayerScreen() {
     isShuffle, isRepeat, isLoading, isBuffering, error,
     togglePlay, next, prev, seek, toggleShuffle, toggleRepeat, playSong,
   } = usePlayer();
-  const { get }  = useApi();
+  const { get } = useApi();
   const { isFavourite, toggleFavourite } = useFavourites();
-  const router   = useRouter();
-  const { top: topInset } = useSafeAreaInsets();
+  const router = useRouter();
+  const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
 
   const liked = currentSong ? isFavourite(currentSong._id) : false;
   const [showPlaylistSheet, setShowPlaylistSheet] = useState(false);
-  const [showQueue,     setShowQueue]     = useState(false);
-  const [hasLyrics,    setHasLyrics]    = useState(false);
-  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [showQueue,         setShowQueue]         = useState(false);
+  const [hasLyrics,         setHasLyrics]         = useState(false);
+  const [lyricsLoading,     setLyricsLoading]     = useState(false);
 
-  // ── Artwork swipe animation ───────────────────────────────────────────────
-  const slideAnim  = useRef(new Animated.Value(0)).current;
-  const scaleAnim  = useRef(new Animated.Value(1)).current;
-  const lastIdRef  = useRef<string | null>(currentSong?._id ?? null);
-  const queueRef   = useRef(queue);
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const lastIdRef = useRef<string | null>(currentSong?._id ?? null);
+  const queueRef  = useRef(queue);
   const [displayedSong, setDisplayedSong] = useState<Song | null>(currentSong ?? null);
 
   useEffect(() => { queueRef.current = queue; }, [queue]);
@@ -486,7 +381,6 @@ export default function PlayerScreen() {
     if (currentSong && !displayedSong) setDisplayedSong(currentSong);
   }, [currentSong, displayedSong]);
 
-  // ── Lyrics probe ─────────────────────────────────────────────────────────
   const fetchedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!currentSong) return;
@@ -532,118 +426,103 @@ export default function PlayerScreen() {
     <View style={{ flex: 1, backgroundColor: P.bg }}>
       <StatusBar style="dark" />
 
-      {/* ── Top section: header + artwork + song info + duration ── */}
-      <View>
-        <View style={[styles.header, { paddingTop: topInset + 10 }]}>
-          <Pressable style={({ pressed }) => [styles.backCircle, pressed && { opacity: 0.75 }]} onPress={() => router.back()} accessibilityLabel="Go back">
-            <MaterialIcons name="arrow-back-ios" size={18} color={P.surface} style={{ marginLeft: 4 }} />
-          </Pressable>
-          <Text style={styles.nowPlayingLabel}>Now Playing</Text>
-          <Pressable style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.6 }]} onPress={() => Alert.alert("Share", "Sharing coming soon!")} accessibilityLabel="Share song">
-            <MaterialIcons name="share" size={20} color={P.sub} />
-          </Pressable>
-        </View>
-
-        <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
-          <FanArtwork
-            current={displayedSong}
-            prev={displayedPrev}
-            next={displayedNext}
-            scaleAnim={scaleAnim}
-          />
-        </Animated.View>
-
-        {(isLoading || isBuffering) && (
-          <View style={styles.loadingBadge}>
-            <ActivityIndicator size="small" color={P.red} />
-          </View>
-        )}
-
-        {!!error && (
-          <Pressable style={styles.errorBanner} onPress={() => currentSong && playSong(currentSong, queue.length ? queue : undefined)}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Text style={styles.errorHint}>Tap to retry</Text>
-          </Pressable>
-        )}
-
-        <View style={styles.infoRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.songTitle} numberOfLines={1}>{currentSong.title}</Text>
-            <Text style={styles.songArtist} numberOfLines={1}>{currentSong.artist}</Text>
-          </View>
-          <Pressable onPress={() => toggleFavourite(currentSong._id)} hitSlop={10} accessibilityLabel={liked ? "Remove from favourites" : "Add to favourites"}>
-            <MaterialIcons name={liked ? "favorite" : "favorite-border"} size={24} color={liked ? P.red : P.sub} />
-          </Pressable>
-        </View>
-
-        <View style={styles.durationRow}>
-          <Text style={styles.durationLabel}>Duration</Text>
-          <View style={styles.durationDot} />
-          <Text style={styles.durationPct}>{pct}%</Text>
-        </View>
+      {/* ── Header ── */}
+      <View style={[styles.header, { paddingTop: topInset + 10 }]}>
+        <Pressable style={({ pressed }) => [styles.backCircle, pressed && { opacity: 0.75 }]} onPress={() => router.back()} accessibilityLabel="Go back">
+          <MaterialIcons name="arrow-back-ios" size={18} color={P.surface} style={{ marginLeft: 4 }} />
+        </Pressable>
+        <Text style={styles.nowPlayingLabel}>Now Playing</Text>
+        <Pressable style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.6 }]} onPress={() => Alert.alert("Share", "Sharing coming soon!")} accessibilityLabel="Share song">
+          <MaterialIcons name="share" size={20} color={P.sub} />
+        </Pressable>
       </View>
 
-      {/* ── Bottom section: wave + controls + actions — pinned to bottom ── */}
-      <View style={styles.bottomSection}>
-        <WaveSeekBar progress={progress} onSeek={seek} isPlaying={isPlaying} />
+      {/* ── Artwork ── */}
+      <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
+        <FanArtwork current={displayedSong} prev={displayedPrev} next={displayedNext} scaleAnim={scaleAnim} />
+      </Animated.View>
 
-        <View style={styles.timeRow}>
-          <Text style={styles.timeText}>{fmt(elapsed)}</Text>
-          <Text style={styles.timeText}>{fmt(duration)}</Text>
+      {(isLoading || isBuffering) && (
+        <View style={styles.loadingBadge}>
+          <ActivityIndicator size="small" color={P.red} />
         </View>
+      )}
 
-        <View style={styles.controls}>
-          <Pressable style={({ pressed }) => [styles.sideBtn, pressed && { opacity: 0.5 }]} onPress={toggleRepeat} accessibilityLabel="Toggle repeat">
-            <MaterialIcons name="repeat" size={22} color={isRepeat ? P.red : P.sub} />
-            {isRepeat && <View style={styles.activeDot} />}
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.65 }]} onPress={prev} accessibilityLabel="Previous">
-            <MaterialIcons name="skip-previous" size={34} color={P.text} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.playBtn, pressed && { transform: [{ scale: 0.93 }] }]}
-            onPress={() => { togglePlay(); pulseCover(); }}
-            disabled={isLoading}
-            accessibilityLabel={isPlaying ? "Pause" : "Play"}
-          >
-            {isLoading
-              ? <ActivityIndicator color={P.surface} size="small" />
-              : <MaterialIcons name={isPlaying ? "pause" : "play-arrow"} size={36} color={P.surface} />
-            }
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.65 }]} onPress={next} accessibilityLabel="Next">
-            <MaterialIcons name="skip-next" size={34} color={P.text} />
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.sideBtn, pressed && { opacity: 0.5 }]} onPress={toggleShuffle} accessibilityLabel="Toggle shuffle">
-            <MaterialIcons name="shuffle" size={22} color={isShuffle ? P.red : P.sub} />
-            {isShuffle && <View style={styles.activeDot} />}
-          </Pressable>
-        </View>
+      {!!error && (
+        <Pressable style={styles.errorBanner} onPress={() => currentSong && playSong(currentSong, queue.length ? queue : undefined)}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorHint}>Tap to retry</Text>
+        </Pressable>
+      )}
 
-        <View style={styles.actionRow}>
-          <Pressable
-            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}
-            onPress={() => setShowPlaylistSheet(true)}
-            accessibilityLabel="Add to playlist"
-          >
-            <MaterialIcons name="playlist-add" size={22} color={P.sub} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.actionBtn, hasLyrics && styles.actionBtnActive, pressed && { opacity: 0.7 }, !hasLyrics && { opacity: 0.4 }]}
-            onPress={() => router.push("/lyrics")}
-            disabled={lyricsLoading}
-            accessibilityLabel="View lyrics"
-          >
-            <MaterialIcons name={lyricsLoading ? "hourglass-empty" : "mic"} size={22} color={hasLyrics ? P.surface : P.sub} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}
-            onPress={() => setShowQueue(true)}
-            accessibilityLabel="Show queue"
-          >
-            <MaterialIcons name="queue-music" size={22} color={P.sub} />
-          </Pressable>
+      {/* ── Song info ── */}
+      <View style={styles.infoRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.songTitle} numberOfLines={1}>{currentSong.title}</Text>
+          <Text style={styles.songArtist} numberOfLines={1}>{currentSong.artist}</Text>
         </View>
+        <Pressable onPress={() => toggleFavourite(currentSong._id)} hitSlop={10} accessibilityLabel={liked ? "Remove from favourites" : "Add to favourites"}>
+          <MaterialIcons name={liked ? "favorite" : "favorite-border"} size={24} color={liked ? P.red : P.sub} />
+        </Pressable>
+      </View>
+
+      {/* ── Spacer pushes controls to bottom ── */}
+      <View style={{ flex: 1 }} />
+
+      {/* ── Seek bar ── */}
+      <SeekBar progress={progress} onSeek={seek} />
+
+      {/* ── Time row ── */}
+      <View style={styles.timeRow}>
+        <Text style={styles.timeText}>{fmt(elapsed)}</Text>
+        <Text style={styles.timeText}>{fmt(duration)}</Text>
+      </View>
+
+      {/* ── Controls ── */}
+      <View style={styles.controls}>
+        <Pressable style={({ pressed }) => [styles.sideBtn, pressed && { opacity: 0.5 }]} onPress={toggleRepeat} accessibilityLabel="Toggle repeat">
+          <MaterialIcons name="repeat" size={22} color={isRepeat ? P.red : P.sub} />
+          {isRepeat && <View style={styles.activeDot} />}
+        </Pressable>
+        <Pressable style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.65 }]} onPress={prev} accessibilityLabel="Previous">
+          <MaterialIcons name="skip-previous" size={34} color={P.text} />
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.playBtn, pressed && { transform: [{ scale: 0.93 }] }]}
+          onPress={() => { togglePlay(); pulseCover(); }}
+          disabled={isLoading}
+          accessibilityLabel={isPlaying ? "Pause" : "Play"}
+        >
+          {isLoading
+            ? <ActivityIndicator color={P.surface} size="small" />
+            : <MaterialIcons name={isPlaying ? "pause" : "play-arrow"} size={36} color={P.surface} />
+          }
+        </Pressable>
+        <Pressable style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.65 }]} onPress={next} accessibilityLabel="Next">
+          <MaterialIcons name="skip-next" size={34} color={P.text} />
+        </Pressable>
+        <Pressable style={({ pressed }) => [styles.sideBtn, pressed && { opacity: 0.5 }]} onPress={toggleShuffle} accessibilityLabel="Toggle shuffle">
+          <MaterialIcons name="shuffle" size={22} color={isShuffle ? P.red : P.sub} />
+          {isShuffle && <View style={styles.activeDot} />}
+        </Pressable>
+      </View>
+
+      {/* ── Action row ── */}
+      <View style={[styles.actionRow, { paddingBottom: Math.max(bottomInset, 20) }]}>
+        <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]} onPress={() => setShowPlaylistSheet(true)} accessibilityLabel="Add to playlist">
+          <MaterialIcons name="playlist-add" size={22} color={P.sub} />
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.actionBtn, hasLyrics && styles.actionBtnActive, pressed && { opacity: 0.7 }, !hasLyrics && { opacity: 0.4 }]}
+          onPress={() => router.push("/lyrics")}
+          disabled={lyricsLoading}
+          accessibilityLabel="View lyrics"
+        >
+          <MaterialIcons name={lyricsLoading ? "hourglass-empty" : "mic"} size={22} color={hasLyrics ? P.surface : P.sub} />
+        </Pressable>
+        <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]} onPress={() => setShowQueue(true)} accessibilityLabel="Show queue">
+          <MaterialIcons name="queue-music" size={22} color={P.sub} />
+        </Pressable>
       </View>
 
       <AddToPlaylistSheet
@@ -665,12 +544,6 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
-  bottomSection: {
-    flex: 1,
-    justifyContent: "flex-end",
-    paddingBottom: 32,
-  },
-
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 14 },
   backCircle: {
     width: 40, height: 40, borderRadius: 20, backgroundColor: P.red,
@@ -689,19 +562,14 @@ const styles = StyleSheet.create({
   errorText:   { color: P.red, fontSize: 13, fontWeight: "600", textAlign: "center" },
   errorHint:   { color: "#E57373", fontSize: 11, marginTop: 2 },
 
-  infoRow:    { flexDirection: "row", alignItems: "center", paddingHorizontal: 28, marginBottom: 10 },
-  songTitle:  { fontSize: 21, fontWeight: "900", color: P.text, letterSpacing: -0.3 },
-  songArtist: { fontSize: 14, color: P.sub, marginTop: 4 },
+  infoRow:    { flexDirection: "row", alignItems: "center", paddingHorizontal: 24, marginBottom: 4 },
+  songTitle:  { fontSize: 20, fontWeight: "900", color: P.text, letterSpacing: -0.3 },
+  songArtist: { fontSize: 14, color: P.sub, marginTop: 3 },
 
-  durationRow:  { flexDirection: "row", alignItems: "center", paddingHorizontal: 28, marginBottom: 6, gap: 8 },
-  durationLabel:{ fontSize: 12, color: P.sub, fontWeight: "600" },
-  durationDot:  { width: 4, height: 4, borderRadius: 2, backgroundColor: P.red },
-  durationPct:  { fontSize: 12, color: P.red, fontWeight: "700" },
-
-  timeRow:  { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 28, marginBottom: 12 },
+  timeRow:  { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 28, marginBottom: 16 },
   timeText: { fontSize: 11, color: P.sub, fontWeight: "600" },
 
-  controls:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22, marginBottom: 10 },
+  controls:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22, marginBottom: 16 },
   sideBtn:   { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   activeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: P.red, position: "absolute", bottom: 4, alignSelf: "center" },
   navBtn:    { width: 52, height: 52, alignItems: "center", justifyContent: "center" },
@@ -714,7 +582,7 @@ const styles = StyleSheet.create({
     }),
   },
 
-  actionRow:       { flexDirection: "row", justifyContent: "center", gap: 20, marginBottom: 8 },
+  actionRow:       { flexDirection: "row", justifyContent: "center", gap: 20, paddingTop: 4 },
   actionBtn:       { width: 42, height: 42, borderRadius: 21, backgroundColor: P.border, alignItems: "center", justifyContent: "center" },
   actionBtnActive: { backgroundColor: P.red },
 });
