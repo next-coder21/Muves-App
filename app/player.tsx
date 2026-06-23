@@ -531,132 +531,120 @@ export default function PlayerScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: P.bg }}>
       <StatusBar style="dark" />
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
 
-      {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: topInset + 10 }]}>
-        <Pressable style={({ pressed }) => [styles.backCircle, pressed && { opacity: 0.75 }]} onPress={() => router.back()} accessibilityLabel="Go back">
-          <MaterialIcons name="arrow-back-ios" size={18} color={P.surface} style={{ marginLeft: 4 }} />
-        </Pressable>
-        <Text style={styles.nowPlayingLabel}>Now Playing</Text>
-        <Pressable style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.6 }]} onPress={() => Alert.alert("Share", "Sharing coming soon!")} accessibilityLabel="Share song">
-          <MaterialIcons name="share" size={20} color={P.sub} />
-        </Pressable>
-      </View>
-
-      {/* ── Fan artwork with slide animation ── */}
-      <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
-        <FanArtwork
-          current={displayedSong}
-          prev={displayedPrev}
-          next={displayedNext}
-          scaleAnim={scaleAnim}
-        />
-      </Animated.View>
-
-      {/* Buffering badge */}
-      {(isLoading || isBuffering) && (
-        <View style={styles.loadingBadge}>
-          <ActivityIndicator size="small" color={P.red} />
+      {/* ── Top section: header + artwork + song info + duration ── */}
+      <View>
+        <View style={[styles.header, { paddingTop: topInset + 10 }]}>
+          <Pressable style={({ pressed }) => [styles.backCircle, pressed && { opacity: 0.75 }]} onPress={() => router.back()} accessibilityLabel="Go back">
+            <MaterialIcons name="arrow-back-ios" size={18} color={P.surface} style={{ marginLeft: 4 }} />
+          </Pressable>
+          <Text style={styles.nowPlayingLabel}>Now Playing</Text>
+          <Pressable style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.6 }]} onPress={() => Alert.alert("Share", "Sharing coming soon!")} accessibilityLabel="Share song">
+            <MaterialIcons name="share" size={20} color={P.sub} />
+          </Pressable>
         </View>
-      )}
 
-      {/* Error banner */}
-      {!!error && (
-        <Pressable style={styles.errorBanner} onPress={() => currentSong && playSong(currentSong, queue.length ? queue : undefined)}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Text style={styles.errorHint}>Tap to retry</Text>
-        </Pressable>
-      )}
+        <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
+          <FanArtwork
+            current={displayedSong}
+            prev={displayedPrev}
+            next={displayedNext}
+            scaleAnim={scaleAnim}
+          />
+        </Animated.View>
 
-      {/* ── Song info ── */}
-      <View style={styles.infoRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.songTitle} numberOfLines={1}>{currentSong.title}</Text>
-          <Text style={styles.songArtist} numberOfLines={1}>{currentSong.artist}</Text>
+        {(isLoading || isBuffering) && (
+          <View style={styles.loadingBadge}>
+            <ActivityIndicator size="small" color={P.red} />
+          </View>
+        )}
+
+        {!!error && (
+          <Pressable style={styles.errorBanner} onPress={() => currentSong && playSong(currentSong, queue.length ? queue : undefined)}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorHint}>Tap to retry</Text>
+          </Pressable>
+        )}
+
+        <View style={styles.infoRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.songTitle} numberOfLines={1}>{currentSong.title}</Text>
+            <Text style={styles.songArtist} numberOfLines={1}>{currentSong.artist}</Text>
+          </View>
+          <Pressable onPress={() => toggleFavourite(currentSong._id)} hitSlop={10} accessibilityLabel={liked ? "Remove from favourites" : "Add to favourites"}>
+            <MaterialIcons name={liked ? "favorite" : "favorite-border"} size={24} color={liked ? P.red : P.sub} />
+          </Pressable>
         </View>
-        <Pressable onPress={() => toggleFavourite(currentSong._id)} hitSlop={10} accessibilityLabel={liked ? "Remove from favourites" : "Add to favourites"}>
-          <MaterialIcons name={liked ? "favorite" : "favorite-border"} size={24} color={liked ? P.red : P.sub} />
-        </Pressable>
+
+        <View style={styles.durationRow}>
+          <Text style={styles.durationLabel}>Duration</Text>
+          <View style={styles.durationDot} />
+          <Text style={styles.durationPct}>{pct}%</Text>
+        </View>
       </View>
 
-      {/* ── Progress label ── */}
-      <View style={styles.durationRow}>
-        <Text style={styles.durationLabel}>Duration</Text>
-        <View style={styles.durationDot} />
-        <Text style={styles.durationPct}>{pct}%</Text>
+      {/* ── Bottom section: wave + controls + actions — pinned to bottom ── */}
+      <View style={styles.bottomSection}>
+        <WaveSeekBar progress={progress} onSeek={seek} isPlaying={isPlaying} />
+
+        <View style={styles.timeRow}>
+          <Text style={styles.timeText}>{fmt(elapsed)}</Text>
+          <Text style={styles.timeText}>{fmt(duration)}</Text>
+        </View>
+
+        <View style={styles.controls}>
+          <Pressable style={({ pressed }) => [styles.sideBtn, pressed && { opacity: 0.5 }]} onPress={toggleRepeat} accessibilityLabel="Toggle repeat">
+            <MaterialIcons name="repeat" size={22} color={isRepeat ? P.red : P.sub} />
+            {isRepeat && <View style={styles.activeDot} />}
+          </Pressable>
+          <Pressable style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.65 }]} onPress={prev} accessibilityLabel="Previous">
+            <MaterialIcons name="skip-previous" size={34} color={P.text} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.playBtn, pressed && { transform: [{ scale: 0.93 }] }]}
+            onPress={() => { togglePlay(); pulseCover(); }}
+            disabled={isLoading}
+            accessibilityLabel={isPlaying ? "Pause" : "Play"}
+          >
+            {isLoading
+              ? <ActivityIndicator color={P.surface} size="small" />
+              : <MaterialIcons name={isPlaying ? "pause" : "play-arrow"} size={36} color={P.surface} />
+            }
+          </Pressable>
+          <Pressable style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.65 }]} onPress={next} accessibilityLabel="Next">
+            <MaterialIcons name="skip-next" size={34} color={P.text} />
+          </Pressable>
+          <Pressable style={({ pressed }) => [styles.sideBtn, pressed && { opacity: 0.5 }]} onPress={toggleShuffle} accessibilityLabel="Toggle shuffle">
+            <MaterialIcons name="shuffle" size={22} color={isShuffle ? P.red : P.sub} />
+            {isShuffle && <View style={styles.activeDot} />}
+          </Pressable>
+        </View>
+
+        <View style={styles.actionRow}>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}
+            onPress={() => setShowPlaylistSheet(true)}
+            accessibilityLabel="Add to playlist"
+          >
+            <MaterialIcons name="playlist-add" size={22} color={P.sub} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, hasLyrics && styles.actionBtnActive, pressed && { opacity: 0.7 }, !hasLyrics && { opacity: 0.4 }]}
+            onPress={() => router.push("/lyrics")}
+            disabled={lyricsLoading}
+            accessibilityLabel="View lyrics"
+          >
+            <MaterialIcons name={lyricsLoading ? "hourglass-empty" : "mic"} size={22} color={hasLyrics ? P.surface : P.sub} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}
+            onPress={() => setShowQueue(true)}
+            accessibilityLabel="Show queue"
+          >
+            <MaterialIcons name="queue-music" size={22} color={P.sub} />
+          </Pressable>
+        </View>
       </View>
-
-      {/* ── Animated wave seek bar ── */}
-      <WaveSeekBar progress={progress} onSeek={seek} isPlaying={isPlaying} />
-
-      {/* ── Time row ── */}
-      <View style={styles.timeRow}>
-        <Text style={styles.timeText}>{fmt(elapsed)}</Text>
-        <Text style={styles.timeText}>{fmt(duration)}</Text>
-      </View>
-
-      {/* ── Controls ── */}
-      <View style={styles.controls}>
-        <Pressable style={({ pressed }) => [styles.sideBtn, pressed && { opacity: 0.5 }]} onPress={toggleRepeat} accessibilityLabel="Toggle repeat">
-          <MaterialIcons name="repeat" size={22} color={isRepeat ? P.red : P.sub} />
-          {isRepeat && <View style={styles.activeDot} />}
-        </Pressable>
-        <Pressable style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.65 }]} onPress={prev} accessibilityLabel="Previous">
-          <MaterialIcons name="skip-previous" size={34} color={P.text} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.playBtn, pressed && { transform: [{ scale: 0.93 }] }]}
-          onPress={() => { togglePlay(); pulseCover(); }}
-          disabled={isLoading}
-          accessibilityLabel={isPlaying ? "Pause" : "Play"}
-        >
-          {isLoading
-            ? <ActivityIndicator color={P.surface} size="small" />
-            : <MaterialIcons name={isPlaying ? "pause" : "play-arrow"} size={36} color={P.surface} />
-          }
-        </Pressable>
-        <Pressable style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.65 }]} onPress={next} accessibilityLabel="Next">
-          <MaterialIcons name="skip-next" size={34} color={P.text} />
-        </Pressable>
-        <Pressable style={({ pressed }) => [styles.sideBtn, pressed && { opacity: 0.5 }]} onPress={toggleShuffle} accessibilityLabel="Toggle shuffle">
-          <MaterialIcons name="shuffle" size={22} color={isShuffle ? P.red : P.sub} />
-          {isShuffle && <View style={styles.activeDot} />}
-        </Pressable>
-      </View>
-
-      {/* ── Action row ── */}
-      <View style={styles.actionRow}>
-        <Pressable
-          style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => setShowPlaylistSheet(true)}
-          accessibilityLabel="Add to playlist"
-        >
-          <MaterialIcons name="playlist-add" size={22} color={P.sub} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.actionBtn, hasLyrics && styles.actionBtnActive, pressed && { opacity: 0.7 }, !hasLyrics && { opacity: 0.4 }]}
-          onPress={() => router.push("/lyrics")}
-          disabled={lyricsLoading}
-          accessibilityLabel="View lyrics"
-        >
-          <MaterialIcons name={lyricsLoading ? "hourglass-empty" : "mic"} size={22} color={hasLyrics ? P.surface : P.sub} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => setShowQueue(true)}
-          accessibilityLabel="Show queue"
-        >
-          <MaterialIcons name="queue-music" size={22} color={P.sub} />
-        </Pressable>
-      </View>
-
-      </ScrollView>
 
       <AddToPlaylistSheet
         visible={showPlaylistSheet}
@@ -677,6 +665,12 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
+  bottomSection: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingBottom: 32,
+  },
+
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 14 },
   backCircle: {
     width: 40, height: 40, borderRadius: 20, backgroundColor: P.red,
