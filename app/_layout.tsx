@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
+﻿import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
@@ -15,12 +15,13 @@ import { FavouritesProvider } from "@/context/FavouritesContext";
 import { PlaylistProvider } from "@/context/PlaylistContext";
 import { NetworkProvider, useNetwork } from "@/context/NetworkContext";
 import { LocalSongsProvider } from "@/context/LocalSongsContext";
+import { AlertProvider } from "@/context/AlertContext";
 
 export const unstable_settings = {
   anchor: "(tabs)",
 };
 
-const LIME = "#C8FF00";
+const LIME = "#E53935";
 
 function SplashLoading() {
   return (
@@ -76,7 +77,7 @@ function AuthGate() {
 function RootLayoutInner() {
   const { loading } = useAuth();
   const { isDark } = useTheme();
-  const { state: updateState, downloadUpdate } = useAppUpdate();
+  const { state: updateState, dlStatus, startUpdate } = useAppUpdate();
   const [updateDismissed, setUpdateDismissed] = useState(false);
 
   if (loading) {
@@ -103,12 +104,17 @@ function RootLayoutInner() {
         <Stack.Screen name="playlist/[id]" options={{ headerShown: false, animation: "slide_from_right" }} />
         <Stack.Screen name="album/[id]" options={{ headerShown: false, animation: "slide_from_right" }} />
         <Stack.Screen name="artists" options={{ headerShown: false, animation: "slide_from_right" }} />
+        <Stack.Screen name="lyrics" options={{ headerShown: false, animation: "slide_from_bottom" }} />
         <Stack.Screen name="offline" options={{ headerShown: false }} />
+        <Stack.Screen name="help-faq" options={{ headerShown: false, animation: "slide_from_right" }} />
+        <Stack.Screen name="feedback" options={{ headerShown: false, animation: "slide_from_right" }} />
+        <Stack.Screen name="privacy-policy" options={{ headerShown: false, animation: "slide_from_right" }} />
       </Stack>
       {updateState.status === "available" && !updateDismissed && (
         <UpdateModal
           info={updateState.info}
-          onUpdate={() => { downloadUpdate(updateState.info.apkUrl!); }}
+          dlStatus={dlStatus}
+          onUpdate={() => startUpdate(updateState.info.apkUrl!)}
           onDismiss={() => setUpdateDismissed(true)}
         />
       )}
@@ -142,8 +148,10 @@ export default function RootLayout() {
           <LocalSongsProvider>
             <FavouritesProvider>
               <PlaylistProvider>
-                <StatusBar style="light" />
-                <RootLayoutInner />
+                <AlertProvider>
+                  <StatusBar style="light" />
+                  <RootLayoutInner />
+                </AlertProvider>
               </PlaylistProvider>
             </FavouritesProvider>
           </LocalSongsProvider>

@@ -2,8 +2,9 @@
 // Set USE_LOCAL to true  → dev server at DEV_BASE
 // Set USE_LOCAL to false → production Render server
 const USE_LOCAL = false;
-const DEV_BASE  = "http://10.33.159.254:5000";
-const PROD_BASE = "https://kkmusicserver.onrender.com";
+// adb reverse tcp:5000 tcp:5000 tunnels host port 5000 → emulator localhost:5000
+const DEV_BASE  = "http://10.103.109.254:5000";
+const PROD_BASE = "https://api.lijishwilson.in/muves";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RAW_BASE =
@@ -18,6 +19,8 @@ export const API = {
   // Auth
   LOGIN:           `${BASE_URL}/auth/login`,
   REGISTER:        `${BASE_URL}/auth/register`,
+  FORGOT_PASSWORD: `${BASE_URL}/auth/forgot-password`,
+  VERIFY_OTP:      `${BASE_URL}/auth/verify-otp`,
   VERIFY_SECURITY: `${BASE_URL}/auth/verify-security`,
   RESET_PASSWORD:  `${BASE_URL}/auth/reset-password`,
   LOGOUT:          `${BASE_URL}/auth/logout`,
@@ -35,10 +38,16 @@ export const API = {
   LYRICS_URL:      (id: string) => `${BASE_URL}/auth/music/songs/${encodeURIComponent(id)}/lyrics`,
   // Search
   SEARCH_URL:      `${BASE_URL}/auth/search`,
+  // Queue persistence
+  QUEUE_GET:       `${BASE_URL}/auth/queue`,
+  QUEUE_SYNC:      `${BASE_URL}/auth/queue/sync`,
+  QUEUE_CLEAR:     `${BASE_URL}/auth/queue/clear`,
   // Favourites
   FAVOURITES:      `${BASE_URL}/auth/favourites`,
   FAV_ADD:         `${BASE_URL}/auth/favourites/add`,
   FAV_REMOVE:      `${BASE_URL}/auth/favourites/remove`,
+  // Feedback
+  FEEDBACK:        `${BASE_URL}/auth/feedback`,
   // Playlists
   PLAYLISTS:       `${BASE_URL}/auth/playlists`,
   PLAYLIST:        (id: string) => `${BASE_URL}/auth/playlists/${encodeURIComponent(id)}`,

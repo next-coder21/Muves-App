@@ -2,12 +2,20 @@
   "expo": {
     "name": "Muves",
     "slug": "muvesmobile",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "muves",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "updates": {
+      "url": "https://u.expo.dev/b127bd04-7106-40d9-b9f5-9eebf2259dd0",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.muves.app",
@@ -24,6 +32,7 @@
     "android": {
       "package": "com.muves.app",
       "versionCode": 1,
+      "requestLegacyExternalStorage": true,
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
@@ -47,6 +56,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-updates",
       [
         "expo-splash-screen",
         {

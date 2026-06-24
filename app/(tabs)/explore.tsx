@@ -1,6 +1,4 @@
 import {
-  ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,12 +6,13 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { Image } from "expo-image";
+import SearchSkeleton from "@/components/SearchSkeleton";
+import BrowseGrid from "@/components/BrowseGrid";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BlurView } from "expo-blur";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useApi } from "@/hooks/useApi";
@@ -21,9 +20,19 @@ import { usePlayer, Song } from "@/context/PlayerContext";
 import { API } from "@/constants/api";
 import { normalizeSongs } from "@/utils/normalize";
 import { usePlayerInset } from "@/hooks/usePlayerInset";
-import { useColors, Colors } from "@/context/ThemeContext";
 
-const LIME = "#C8FF00";
+// ─── Palette ──────────────────────────────────────────────────────────────────
+const P = {
+  bg: "#F5F5F5",
+  surface: "#FFFFFF",
+  red: "#E53935",
+  redLight: "#FDECEA",
+  text: "#1A1A1A",
+  sub: "#9E9E9E",
+  border: "#EEEEEE",
+  divider: "#F0F0F0",
+};
+
 const HISTORY_KEY = "search_history";
 const MAX_HISTORY = 10;
 
@@ -41,28 +50,29 @@ async function saveHistory(history: string[]) {
 function ResultRow({ song, index, queue }: { song: Song; index: number; queue: Song[] }) {
   const { playSong } = usePlayer();
   const router = useRouter();
-  const c = useColors();
   return (
     <Pressable
-      style={({ pressed }) => [{ flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: c.divider, gap: 12 }, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [styles.resultRow, pressed && { opacity: 0.7 }]}
       onPress={() => { playSong(song, queue.length ? queue : [song]); router.push("/player"); }}
     >
-      <Text style={{ width: 22, fontSize: 13, color: c.muted, fontWeight: "700", textAlign: "center" }}>{index + 1}</Text>
-      <View style={{ width: 52, height: 52, borderRadius: 12, overflow: "hidden", backgroundColor: c.card2 }}>
+      <Text style={styles.resultIndex}>{index + 1}</Text>
+      <View style={styles.resultThumb}>
         {song.coverImage ? (
-          <Image source={{ uri: song.coverImage }} style={StyleSheet.absoluteFill} />
+          <Image source={{ uri: song.coverImage }} style={StyleSheet.absoluteFill} contentFit="cover" />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: c.card2 }]}>
-            <MaterialIcons name="music-note" size={20} color={LIME} />
+          <View style={[StyleSheet.absoluteFill, styles.resultThumbFallback]}>
+            <MaterialIcons name="music-note" size={20} color={P.red} />
           </View>
         )}
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: "700", color: c.text }} numberOfLines={1}>{song.title}</Text>
-        <Text style={{ fontSize: 12, color: c.muted, marginTop: 2 }} numberOfLines={1}>{song.artist}{song.album ? ` · ${song.album}` : ""}</Text>
+        <Text style={styles.resultTitle} numberOfLines={1}>{song.title}</Text>
+        <Text style={styles.resultArtist} numberOfLines={1}>
+          {song.artist}{song.album ? ` · ${song.album}` : ""}
+        </Text>
       </View>
-      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(200,255,0,0.1)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: LIME + "33" }}>
-        <MaterialIcons name="play-arrow" size={16} color={LIME} />
+      <View style={styles.resultPlayBtn}>
+        <MaterialIcons name="play-arrow" size={18} color={P.red} />
       </View>
     </Pressable>
   );
@@ -75,8 +85,6 @@ export default function SearchScreen() {
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inflightRef = useRef<AbortController | null>(null);
-  const c = useColors();
-  const styles = useMemo(() => makeStyles(c), [c]);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Song[]>([]);
@@ -105,7 +113,11 @@ export default function SearchScreen() {
 
   const doSearch = useCallback(async (q: string, saveToHistory = false) => {
     const trimmed = q.trim();
-    if (!trimmed) { inflightRef.current?.abort(); inflightRef.current = null; setResults([]); setSearched(false); setLoading(false); return; }
+    if (!trimmed) {
+      inflightRef.current?.abort(); inflightRef.current = null;
+      setResults([]); setSearched(false); setLoading(false);
+      return;
+    }
     inflightRef.current?.abort();
     const ctrl = new AbortController();
     inflightRef.current = ctrl;
@@ -128,7 +140,11 @@ export default function SearchScreen() {
   function handleChangeText(t: string) {
     setQuery(t);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!t.trim()) { inflightRef.current?.abort(); inflightRef.current = null; setResults([]); setSearched(false); setLoading(false); return; }
+    if (!t.trim()) {
+      inflightRef.current?.abort(); inflightRef.current = null;
+      setResults([]); setSearched(false); setLoading(false);
+      return;
+    }
     debounceRef.current = setTimeout(() => doSearch(t, false), 400);
   }
 
@@ -152,21 +168,22 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style={c.statusBar} />
-      <LinearGradient colors={c.isDark ? ["#111100", "#0d0d0d"] : ["#f5f5d0", "#f5f5f5"]} style={StyleSheet.absoluteFill} />
+      <StatusBar style="dark" />
 
+      {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: topInset + 12 }]}>
         <Text style={styles.headerTitle}>Search</Text>
         <Text style={styles.headerSub}>Find songs, artists &amp; more</Text>
       </View>
 
-      <BlurView intensity={20} tint={c.tint} style={[styles.searchBar, focused && styles.searchBarFocused]}>
-        <MaterialIcons name="search" size={20} color={c.muted} style={{ marginRight: 8 }} />
+      {/* ── Search bar ── */}
+      <View style={[styles.searchBar, focused && styles.searchBarFocused]}>
+        <MaterialIcons name="search" size={20} color={focused ? P.red : P.sub} style={{ marginRight: 8 }} />
         <TextInput
           ref={inputRef}
           style={styles.searchInput}
           placeholder="Songs, artists, albums..."
-          placeholderTextColor={c.muted}
+          placeholderTextColor={P.sub}
           value={query}
           onChangeText={handleChangeText}
           onSubmitEditing={handleSubmit}
@@ -177,27 +194,30 @@ export default function SearchScreen() {
           autoCapitalize="none"
         />
         {query.length > 0 && (
-          <Pressable onPress={clear} hitSlop={10}>
-            <MaterialIcons name="close" size={18} color={c.muted} />
+          <Pressable onPress={clear} hitSlop={10} accessibilityLabel="Clear search">
+            <MaterialIcons name="close" size={18} color={P.sub} />
           </Pressable>
         )}
-      </BlurView>
+      </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomInset + 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: bottomInset + 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={LIME} />
-            <Text style={styles.loadingText}>Searching...</Text>
-          </View>
+          <SearchSkeleton />
         ) : searched ? (
           results.length > 0 ? (
             <View style={styles.resultsList}>
-              <Text style={styles.resultsCount}>{results.length} results</Text>
-              {results.map((item, i) => <ResultRow key={item._id ?? String(i)} song={item} index={i} queue={results} />)}
+              <Text style={styles.resultsCount}>{results.length} result{results.length !== 1 ? "s" : ""}</Text>
+              {results.map((item, i) => (
+                <ResultRow key={item._id ?? String(i)} song={item} index={i} queue={results} />
+              ))}
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <MaterialIcons name="search-off" size={52} color={c.muted} style={{ marginBottom: 14 }} />
+              <MaterialIcons name="search-off" size={52} color={P.sub} style={{ marginBottom: 14 }} />
               <Text style={styles.emptyTitle}>No results</Text>
               <Text style={styles.emptyText}>Try searching for a different artist or song name</Text>
             </View>
@@ -206,53 +226,107 @@ export default function SearchScreen() {
           <View style={styles.historySection}>
             <View style={styles.historyHeader}>
               <Text style={styles.historyTitle}>Recent Searches</Text>
-              <Pressable onPress={clearAllHistory} hitSlop={10}><Text style={styles.clearAllBtn}>Clear all</Text></Pressable>
+              <Pressable onPress={clearAllHistory} hitSlop={10}>
+                <Text style={styles.clearAllBtn}>Clear all</Text>
+              </Pressable>
             </View>
-            {history.map((term) => (
-              <View key={term} style={styles.historyRow}>
-                <Pressable style={styles.historyRowLeft} onPress={() => tapHistory(term)}>
-                  <MaterialIcons name="history" size={18} color={c.muted} />
-                  <Text style={styles.historyTerm} numberOfLines={1}>{term}</Text>
+            <View style={styles.chipsWrap}>
+              {history.map((term) => (
+                <Pressable
+                  key={term}
+                  style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
+                  onPress={() => tapHistory(term)}
+                >
+                  <MaterialIcons name="history" size={14} color={P.sub} />
+                  <Text style={styles.chipText} numberOfLines={1}>{term}</Text>
+                  <Pressable onPress={() => removeHistory(term)} hitSlop={10} accessibilityLabel={`Remove ${term} from history`}>
+                    <MaterialIcons name="close" size={12} color={P.sub} />
+                  </Pressable>
                 </Pressable>
-                <Pressable onPress={() => removeHistory(term)} hitSlop={10}>
-                  <MaterialIcons name="close" size={16} color={c.muted} />
-                </Pressable>
-              </View>
-            ))}
+              ))}
+            </View>
           </View>
-        ) : null}
+        ) : (
+          <>
+            <Text style={styles.browseTitle}>Browse by mood</Text>
+            <BrowseGrid />
+          </>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-function makeStyles(c: Colors) {
-  return StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.bg },
-    header: { paddingHorizontal: 20, paddingBottom: 16 },
-    headerTitle: { fontSize: 28, fontWeight: "800", color: c.text },
-    headerSub: { fontSize: 13, color: c.muted, marginTop: 4 },
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: P.bg },
 
-    searchBar: { flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 24, height: 52, borderRadius: 16, paddingHorizontal: 14, overflow: "hidden", borderWidth: 1, borderColor: c.cardBorder },
-    searchBarFocused: { borderColor: LIME + "55" },
-    searchInput: { flex: 1, color: c.text, fontSize: 15 },
+  header: { paddingHorizontal: 20, paddingBottom: 16 },
+  headerTitle: { fontSize: 28, fontWeight: "800", color: P.text },
+  headerSub: { fontSize: 13, color: P.sub, marginTop: 4 },
 
-    loadingBox: { alignItems: "center", paddingVertical: 60 },
-    loadingText: { color: c.muted, marginTop: 12, fontSize: 14 },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginBottom: 24,
+    height: 52,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    backgroundColor: P.surface,
+    borderWidth: 1.5,
+    borderColor: P.border,
+  },
+  searchBarFocused: { borderColor: P.red },
+  searchInput: { flex: 1, color: P.text, fontSize: 15 },
 
-    resultsList: { paddingHorizontal: 20 },
-    resultsCount: { fontSize: 13, color: c.muted, marginBottom: 12, fontWeight: "600" },
+  resultsList: { paddingHorizontal: 20 },
+  resultsCount: { fontSize: 13, color: P.sub, marginBottom: 12, fontWeight: "600" },
 
-    emptyState: { alignItems: "center", paddingVertical: 60, paddingHorizontal: 40 },
-    emptyTitle: { fontSize: 18, fontWeight: "700", color: c.text, marginBottom: 8 },
-    emptyText: { fontSize: 14, color: c.muted, textAlign: "center", lineHeight: 21 },
+  resultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: P.divider,
+    gap: 12,
+  },
+  resultIndex: { width: 22, fontSize: 13, color: P.sub, fontWeight: "700", textAlign: "center" },
+  resultThumb: { width: 52, height: 52, borderRadius: 12, overflow: "hidden", backgroundColor: P.border },
+  resultThumbFallback: { alignItems: "center", justifyContent: "center", backgroundColor: P.redLight },
+  resultTitle: { fontSize: 14, fontWeight: "700", color: P.text },
+  resultArtist: { fontSize: 12, color: P.sub, marginTop: 2 },
+  resultPlayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: P.redLight,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FBCDD2",
+  },
 
-    historySection: { paddingHorizontal: 20 },
-    historyHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-    historyTitle: { fontSize: 16, fontWeight: "700", color: c.text },
-    clearAllBtn: { fontSize: 13, color: LIME, fontWeight: "600" },
-    historyRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: c.divider },
-    historyRowLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-    historyTerm: { fontSize: 14, color: c.text, flex: 1 },
-  });
-}
+  emptyState: { alignItems: "center", paddingVertical: 60, paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: P.text, marginBottom: 8 },
+  emptyText: { fontSize: 14, color: P.sub, textAlign: "center", lineHeight: 21 },
+
+  historySection: { paddingHorizontal: 20 },
+  historyHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  historyTitle: { fontSize: 16, fontWeight: "700", color: P.text },
+  clearAllBtn: { fontSize: 13, color: P.red, fontWeight: "600" },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: P.surface,
+    borderRadius: 50,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: P.border,
+  },
+  chipText: { fontSize: 13, color: P.text, fontWeight: "600" },
+
+  browseTitle: { fontSize: 18, fontWeight: "800", color: P.text, paddingHorizontal: 20, marginBottom: 14, marginTop: 8 },
+});

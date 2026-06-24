@@ -1,31 +1,29 @@
 import {
   Animated,
-  Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useEffect, useRef } from "react";
-import { BlurView } from "expo-blur";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { usePlayer } from "@/context/PlayerContext";
-import { useColors } from "@/context/ThemeContext";
 
-const LIME = "#C8FF00";
+const RED = "#E53935";
 
 export default function MiniPlayer() {
-  const { currentSong, isPlaying, progress, togglePlay, next } = usePlayer();
+  const { currentSong, isPlaying, progress, togglePlay, next, prev } = usePlayer();
   const router = useRouter();
-  const c = useColors();
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const scaleAnim   = useRef(new Animated.Value(0.96)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (currentSong) {
       Animated.parallel([
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 10 }),
+        Animated.spring(scaleAnim,   { toValue: 1, useNativeDriver: true, tension: 80, friction: 10 }),
         Animated.timing(opacityAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
       ]).start();
     }
@@ -35,48 +33,118 @@ export default function MiniPlayer() {
 
   return (
     <Animated.View style={[styles.wrapper, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
-      <BlurView intensity={55} tint={c.tint} style={[styles.blur, { borderColor: c.cardBorder }]}>
-        <View style={[styles.progressTrack, { backgroundColor: c.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }]}>
-          <View style={[styles.progressFill, { width: `${(progress * 100).toFixed(1)}%` as `${number}%` }]} />
+      {/* Progress bar at top */}
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${(progress * 100).toFixed(1)}%` as `${number}%` }]} />
+      </View>
+
+      <Pressable style={styles.inner} onPress={() => router.push("/player")}>
+        {/* Album art */}
+        <View style={styles.art}>
+          {currentSong.coverImage ? (
+            <Image source={{ uri: currentSong.coverImage }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.artFallback]}>
+              <MaterialIcons name="music-note" size={18} color={RED} />
+            </View>
+          )}
         </View>
 
-        <Pressable style={styles.inner} onPress={() => router.push("/player")}>
-          <View style={[styles.cover, { backgroundColor: c.card2 }]}>
-            {currentSong.coverImage ? (
-              <Image source={{ uri: currentSong.coverImage }} style={StyleSheet.absoluteFill} />
-            ) : (
-              <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: c.card2 }]}>
-                <MaterialIcons name="music-note" size={20} color={LIME} />
-              </View>
-            )}
-          </View>
+        {/* Info */}
+        <View style={styles.info}>
+          <Text style={styles.title} numberOfLines={1}>{currentSong.title}</Text>
+          <Text style={styles.artist} numberOfLines={1}>{currentSong.artist}</Text>
+        </View>
 
-          <View style={styles.info}>
-            <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>{currentSong.title}</Text>
-            <Text style={[styles.artist, { color: c.muted }]} numberOfLines={1}>{currentSong.artist}</Text>
-          </View>
-
-          <Pressable style={({ pressed }) => [styles.ctrlBtn, pressed && { opacity: 0.5 }]} onPress={(e) => { e.stopPropagation(); togglePlay(); }} hitSlop={8}>
-            <MaterialIcons name={isPlaying ? "pause" : "play-arrow"} size={22} color={LIME} />
+        {/* Controls — stop propagation so taps don't open the player */}
+        <Pressable style={styles.controls} onPress={(e) => e.stopPropagation?.()}>
+          <Pressable
+            style={({ pressed }) => [styles.ctrlBtn, pressed && { opacity: 0.5 }]}
+            onPress={(e) => { e.stopPropagation?.(); prev(); }}
+            hitSlop={8}
+            accessibilityLabel="Previous song"
+          >
+            <MaterialIcons name="skip-previous" size={24} color="#555" />
           </Pressable>
-          <Pressable style={({ pressed }) => [styles.ctrlBtn, pressed && { opacity: 0.5 }]} onPress={(e) => { e.stopPropagation(); next(); }} hitSlop={8}>
-            <MaterialIcons name="skip-next" size={22} color={LIME} />
+
+          <Pressable
+            style={({ pressed }) => [styles.playBtn, pressed && { opacity: 0.85 }]}
+            onPress={(e) => { e.stopPropagation?.(); togglePlay(); }}
+            hitSlop={8}
+            accessibilityLabel={isPlaying ? "Pause" : "Play"}
+          >
+            <MaterialIcons name={isPlaying ? "pause" : "play-arrow"} size={22} color="#fff" />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.ctrlBtn, pressed && { opacity: 0.5 }]}
+            onPress={(e) => { e.stopPropagation?.(); next(); }}
+            hitSlop={8}
+            accessibilityLabel="Next song"
+          >
+            <MaterialIcons name="skip-next" size={24} color={RED} />
           </Pressable>
         </Pressable>
-      </BlurView>
+      </Pressable>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { marginHorizontal: 10, marginBottom: 6, borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 10 },
-  blur: { borderRadius: 20, overflow: "hidden", borderWidth: 1 },
-  progressTrack: { height: 2 },
-  progressFill: { height: "100%", backgroundColor: LIME, borderRadius: 1 },
-  inner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11, gap: 12 },
-  cover: { width: 42, height: 42, borderRadius: 10, overflow: "hidden" },
+  wrapper: {
+    marginHorizontal: 10,
+    marginBottom: 6,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  progressTrack: { height: 3, backgroundColor: "#F0F0F0" },
+  progressFill: { height: "100%", backgroundColor: RED, borderRadius: 1 },
+
+  inner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 12,
+  },
+
+  art: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "#F5F5F5",
+  },
+  artFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FDECEA",
+  },
+
   info: { flex: 1 },
-  title: { fontSize: 13, fontWeight: "700" },
-  artist: { fontSize: 11, marginTop: 2 },
-  ctrlBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  title:  { fontSize: 13, fontWeight: "700", color: "#1A1A1A" },
+  artist: { fontSize: 11, color: "#9E9E9E", marginTop: 2 },
+
+  controls: { flexDirection: "row", alignItems: "center", gap: 4 },
+  ctrlBtn:  { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  playBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: RED,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

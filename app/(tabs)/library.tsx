@@ -1,12 +1,11 @@
 import {
-  Alert, Image, Pressable, RefreshControl,
+  Pressable, RefreshControl,
   ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useApi } from "@/hooks/useApi";
@@ -18,120 +17,166 @@ import { normalizeSong, normalizeSongs, normalizeAlbums } from "@/utils/normaliz
 import AddToPlaylistSheet from "@/components/AddToPlaylistSheet";
 import { usePlayerInset } from "@/hooks/usePlayerInset";
 import { useLocalSongs } from "@/context/LocalSongsContext";
-import { useNetwork } from "@/context/NetworkContext";
-import { useColors, Colors } from "@/context/ThemeContext";
+import { useAppAlert } from "@/context/AlertContext";
 
 type Album = { _id: string; title: string; artist: string; coverImage?: string; songCount?: number; year?: number };
 
-const LIME = "#C8FF00";
-const TABS = ["Playlists", "Recent", "Albums", "Favourites", "On Device"] as const;
+// Matches Home / Search / Explore palette exactly
+const P = {
+  bg: "#F5F5F5",
+  surface: "#FFFFFF",
+  red: "#E53935",
+  redLight: "#FDECEA",
+  text: "#1A1A1A",
+  sub: "#9E9E9E",
+  border: "#EEEEEE",
+  shadow: "rgba(0,0,0,0.06)",
+};
+
+const TABS = ["Playlists", "Recent", "Albums", "Favourites"] as const;
 type Tab = (typeof TABS)[number];
 type MIName = React.ComponentProps<typeof MaterialIcons>["name"];
 
+const TAB_ICONS: Record<Tab, MIName> = {
+  Playlists: "queue-music",
+  Recent: "history",
+  Albums: "album",
+  Favourites: "favorite",
+};
+
+// ─── Song row ─────────────────────────────────────────────────────────────────
 function SongRow({ song, index, queue, onAdd }: { song: Song; index: number; queue: Song[]; onAdd: (s: Song) => void }) {
   const { playSong, currentSong, isPlaying } = usePlayer();
   const { isFavourite, toggleFavourite } = useFavourites();
   const router = useRouter();
-  const c = useColors();
   const active = currentSong?._id === song._id;
   const liked = isFavourite(song._id);
   return (
     <Pressable
-      style={({ pressed }) => [{ flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: 10, borderRadius: 12, paddingHorizontal: 4, marginBottom: 1, gap: 6 }, pressed && { backgroundColor: c.rowPress }]}
+      style={({ pressed }) => [{
+        flexDirection: "row", alignItems: "center", paddingVertical: 10,
+        borderRadius: 14, paddingHorizontal: 8, marginBottom: 2, gap: 6,
+      }, pressed && { backgroundColor: "rgba(0,0,0,0.04)" }]}
       onPress={() => { playSong(song, queue.length ? queue : [song]); router.push("/player"); }}
     >
       {active
-        ? <MaterialIcons name={isPlaying ? "play-arrow" : "pause"} size={16} color={LIME} style={{ width: 22, textAlign: "center" }} />
-        : <Text style={{ width: 28, fontSize: 13, color: c.muted, fontWeight: "700", textAlign: "center" }}>{index + 1}</Text>
+        ? <MaterialIcons name={isPlaying ? "play-arrow" : "pause"} size={16} color={P.red} style={{ width: 22, textAlign: "center" }} />
+        : <Text style={{ width: 28, fontSize: 13, color: P.sub, fontWeight: "700", textAlign: "center" }}>{index + 1}</Text>
       }
-      <View style={{ width: 52, height: 52, borderRadius: 14, overflow: "hidden", backgroundColor: c.card2, marginRight: 6 }}>
+      <View style={{ width: 52, height: 52, borderRadius: 14, overflow: "hidden", backgroundColor: P.border, marginRight: 6 }}>
         {song.coverImage
           ? <Image source={{ uri: song.coverImage }} style={StyleSheet.absoluteFill} />
-          : <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: c.card2 }]}><MaterialIcons name="music-note" size={20} color={LIME} /></View>
+          : <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: P.redLight }]}>
+              <MaterialIcons name="music-note" size={20} color={P.red} />
+            </View>
         }
         {active && (
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" }]}>
-            <MaterialIcons name={isPlaying ? "play-arrow" : "pause"} size={12} color={LIME} />
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(229,57,53,0.15)", alignItems: "center", justifyContent: "center" }]}>
+            <MaterialIcons name={isPlaying ? "play-arrow" : "pause"} size={14} color={P.red} />
           </View>
         )}
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={[{ fontSize: 14, fontWeight: "700", color: c.text }, active && { color: LIME }]} numberOfLines={1}>{song.title}</Text>
-        <Text style={{ fontSize: 12, color: c.muted, marginTop: 3 }} numberOfLines={1}>{song.artist}</Text>
+        <Text style={[{ fontSize: 14, fontWeight: "700", color: P.text }, active && { color: P.red }]} numberOfLines={1}>{song.title}</Text>
+        <Text style={{ fontSize: 12, color: P.sub, marginTop: 3 }} numberOfLines={1}>{song.artist}</Text>
       </View>
       <Pressable hitSlop={12} onPress={() => toggleFavourite(song._id)} style={{ padding: 4 }}>
-        <MaterialIcons name={liked ? "favorite" : "favorite-border"} size={20} color={liked ? LIME : c.muted} />
+        <MaterialIcons name={liked ? "favorite" : "favorite-border"} size={20} color={liked ? P.red : P.sub} />
       </Pressable>
       <Pressable hitSlop={12} onPress={() => onAdd(song)} style={{ padding: 4 }}>
-        <MaterialIcons name="playlist-add" size={22} color={c.muted} />
+        <MaterialIcons name="playlist-add" size={22} color={P.sub} />
       </Pressable>
     </Pressable>
   );
 }
 
+// ─── Album card ───────────────────────────────────────────────────────────────
 function AlbumCard({ album }: { album: Album }) {
   const router = useRouter();
-  const c = useColors();
+  const { currentSong } = usePlayer();
+  const isAlbumPlaying = !!currentSong && currentSong.album === album.title;
   return (
     <Pressable style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.75 }]} onPress={() => router.push(`/album/${album._id}`)}>
-      <View style={{ aspectRatio: 1, borderRadius: 18, overflow: "hidden", backgroundColor: c.card2, marginBottom: 8 }}>
+      <View style={{ aspectRatio: 1, borderRadius: 18, overflow: "hidden", backgroundColor: P.border, marginBottom: 8 }}>
         {album.coverImage
           ? <Image source={{ uri: album.coverImage }} style={StyleSheet.absoluteFill} />
-          : <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: c.card2 }]}><MaterialIcons name="album" size={40} color={c.muted} /></View>
+          : <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: P.redLight }]}>
+              <MaterialIcons name="album" size={40} color={P.red} />
+            </View>
         }
-        <LinearGradient colors={["transparent", "rgba(0,0,0,0.65)"]} style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%" }} />
         {album.songCount !== undefined && (
-          <View style={{ position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.7)", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 }}>
-            <Text style={{ fontSize: 10, color: c.muted, fontWeight: "600" }}>{album.songCount} songs</Text>
+          <View style={{ position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 }}>
+            <Text style={{ fontSize: 10, color: "#fff", fontWeight: "600" }}>{album.songCount} songs</Text>
           </View>
         )}
+        {isAlbumPlaying && (
+          <>
+            <View style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, borderRadius: 18, borderWidth: 2, borderColor: P.red }} />
+            <View style={{ position: "absolute", top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: P.red, alignItems: "center", justifyContent: "center" }}>
+              <MaterialIcons name="graphic-eq" size={14} color="#fff" />
+            </View>
+          </>
+        )}
       </View>
-      <Text style={{ fontSize: 13, fontWeight: "700", color: c.text }} numberOfLines={1}>{album.title}</Text>
-      <Text style={{ fontSize: 12, color: c.muted, marginTop: 2 }} numberOfLines={1}>{album.artist}</Text>
+      <Text style={{ fontSize: 13, fontWeight: "700", color: isAlbumPlaying ? P.red : P.text }} numberOfLines={1}>{album.title}</Text>
+      <Text style={{ fontSize: 12, color: P.sub, marginTop: 2 }} numberOfLines={1}>{album.artist}</Text>
     </Pressable>
   );
 }
 
+// ─── Playlist card ────────────────────────────────────────────────────────────
 function PlaylistCard({ pl, onDelete }: { pl: Playlist; onDelete: (id: string) => void }) {
   const router = useRouter();
-  const c = useColors();
+  const { showAlert } = useAppAlert();
   return (
-    <Pressable onPress={() => router.push(`/playlist/${pl.id}`)} style={({ pressed }) => [{ flexDirection: "row" as const, alignItems: "center" as const, gap: 14, padding: 14, borderRadius: 16, marginBottom: 8, backgroundColor: c.rowPress, borderWidth: 1, borderColor: c.cardBorder }, pressed && { opacity: 0.8 }]}>
-      <View style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: c.card2, alignItems: "center", justifyContent: "center" }}>
-        <MaterialIcons name="queue-music" size={28} color={LIME} />
+    <Pressable
+      onPress={() => router.push(`/playlist/${pl.id}`)}
+      style={({ pressed }) => [{
+        flexDirection: "row", alignItems: "center", gap: 14,
+        padding: 14, borderRadius: 16, marginBottom: 8,
+        backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,
+      }, pressed && { opacity: 0.75 }]}
+    >
+      <View style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: P.redLight, alignItems: "center", justifyContent: "center" }}>
+        <MaterialIcons name="queue-music" size={28} color={P.red} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: "700", color: c.text }} numberOfLines={1}>{pl.name}</Text>
-        <Text style={{ fontSize: 12, color: c.muted, marginTop: 3 }}>{pl.songCount} {pl.songCount === 1 ? "song" : "songs"}</Text>
+        <Text style={{ fontSize: 15, fontWeight: "700", color: P.text }} numberOfLines={1}>{pl.name}</Text>
+        <Text style={{ fontSize: 12, color: P.sub, marginTop: 3 }}>{pl.songCount} {pl.songCount === 1 ? "song" : "songs"}</Text>
       </View>
-      <Pressable hitSlop={12} onPress={() => { Alert.alert("Delete Playlist", `Delete "${pl.name}"?`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => onDelete(pl.id) }]); }} style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.5 }]}>
-        <MaterialIcons name="delete-outline" size={20} color={c.muted} />
+      <Pressable
+        hitSlop={12}
+        onPress={() => showAlert("Delete Playlist", `Delete "${pl.name}"?`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => onDelete(pl.id) }])}
+        style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.5 }]}
+      >
+        <MaterialIcons name="delete-outline" size={20} color={P.sub} />
       </Pressable>
     </Pressable>
   );
 }
 
+// ─── Empty state ──────────────────────────────────────────────────────────────
 function EmptyState({ icon, title, text }: { icon: MIName; title: string; text: string }) {
-  const c = useColors();
   return (
-    <View style={{ alignItems: "center", paddingTop: 70, paddingHorizontal: 40 }}>
-      <MaterialIcons name={icon} size={52} color={c.muted} style={{ marginBottom: 16 }} />
-      <Text style={{ fontSize: 18, fontWeight: "700", color: c.text, marginBottom: 8 }}>{title}</Text>
-      <Text style={{ fontSize: 14, color: c.muted, textAlign: "center", lineHeight: 22 }}>{text}</Text>
+    <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
+      <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: P.redLight, alignItems: "center", justifyContent: "center", marginBottom: 18, borderWidth: 1.5, borderColor: "rgba(229,57,53,0.2)" }}>
+        <MaterialIcons name={icon} size={40} color={P.red} />
+      </View>
+      <Text style={{ fontSize: 17, fontWeight: "800", color: P.text, marginBottom: 8, letterSpacing: -0.4 }}>{title}</Text>
+      <Text style={{ fontSize: 14, color: P.sub, textAlign: "center", lineHeight: 22 }}>{text}</Text>
     </View>
   );
 }
 
+// ─── Main screen ──────────────────────────────────────────────────────────────
 export default function LibraryScreen() {
   const { top: topInset } = useSafeAreaInsets();
   const { get } = useApi();
   const { favouriteIds, count: favCount, loadFavourites } = useFavourites();
   const { playlists, loadPlaylists, createPlaylist, deletePlaylist } = usePlaylists();
-  const { localSongs, totalLocal, permissionStatus, requestPermission } = useLocalSongs();
-  const { isOnline } = useNetwork();
+  const { totalLocal } = useLocalSongs();
   const bottomInset = usePlayerInset();
-  const c = useColors();
-  const styles = useMemo(() => makeStyles(c), [c]);
+  const { showAlert } = useAppAlert();
 
   const [tab, setTab] = useState<Tab>("Playlists");
   const [songs, setSongs] = useState<Song[]>([]);
@@ -159,8 +204,16 @@ export default function LibraryScreen() {
 
   const loadMissingFavDetails = useCallback(async (ids: string[]) => {
     if (!ids.length) return;
-    const fetched = await Promise.all(ids.map(id => get<Record<string, unknown>>(API.SONG_BY_ID(id)).then(d => normalizeSong({ ...d, id: d?.id ?? id })).catch(() => null)));
-    setFavDetails(prev => { const next = new Map(prev); for (const s of fetched) { if (s && s._id) next.set(s._id, s); } return next; });
+    const fetched = await Promise.all(ids.map(id =>
+      get<Record<string, unknown>>(API.SONG_BY_ID(id))
+        .then(d => normalizeSong({ ...d, id: d?.id ?? id }))
+        .catch(() => null)
+    ));
+    setFavDetails(prev => {
+      const next = new Map(prev);
+      for (const s of fetched) { if (s && s._id) next.set(s._id, s); }
+      return next;
+    });
   }, [get]);
 
   useEffect(() => {
@@ -174,25 +227,32 @@ export default function LibraryScreen() {
     if (!favouriteIds.size) return;
     const known = new Set(songs.map(s => s._id));
     const missing: string[] = [];
-    for (const id of favouriteIds) { if (!id) continue; if (!known.has(id) && !favDetails.has(id)) missing.push(id); }
+    for (const id of favouriteIds) {
+      if (!id) continue;
+      if (!known.has(id) && !favDetails.has(id)) missing.push(id);
+    }
     if (missing.length) loadMissingFavDetails(missing);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [favouriteIds, songs]);
 
   async function onRefresh() {
     setRefreshing(true);
-    try { await Promise.all([loadSongs(), loadAlbums(), loadPlaylists(), loadFavourites()]); } finally { setRefreshing(false); }
+    try { await Promise.all([loadSongs(), loadAlbums(), loadPlaylists(), loadFavourites()]); }
+    finally { setRefreshing(false); }
   }
 
   async function handleCreatePlaylist() {
     const trimmed = newName.trim();
     if (!trimmed || creating) return;
     setCreating(true);
-    try { await createPlaylist(trimmed); setNewName(""); setShowCreate(false); } catch (e) { Alert.alert("Error", e instanceof Error ? e.message : "Failed to create playlist"); } finally { setCreating(false); }
+    try { await createPlaylist(trimmed); setNewName(""); setShowCreate(false); }
+    catch (e) { showAlert("Error", e instanceof Error ? e.message : "Failed to create playlist"); }
+    finally { setCreating(false); }
   }
 
   async function handleDeletePlaylist(id: string) {
-    try { await deletePlaylist(id); } catch (e) { Alert.alert("Error", e instanceof Error ? e.message : "Failed to delete playlist"); }
+    try { await deletePlaylist(id); }
+    catch (e) { showAlert("Error", e instanceof Error ? e.message : "Failed to delete playlist"); }
   }
 
   const recent = useMemo(() => songs.slice(0, 30), [songs]);
@@ -207,59 +267,98 @@ export default function LibraryScreen() {
     return out;
   }, [favouriteIds, songs, favDetails]);
 
+  const STAT_ITEMS = [
+    { num: songs.length, label: "Songs", icon: "music-note" as MIName },
+    { num: playlists.length, label: "Playlists", icon: "queue-music" as MIName },
+    { num: favCount, label: "Favourites", icon: "favorite" as MIName },
+    { num: totalLocal, label: "Local", icon: "folder" as MIName },
+  ];
+
   return (
-    <View style={styles.container}>
-      <StatusBar style={c.statusBar} />
-      <LinearGradient colors={c.isDark ? ["#0a0a00", "#0d0d0d"] : ["#f5f5d0", "#f5f5f5"]} style={StyleSheet.absoluteFill} />
+    <View style={{ flex: 1, backgroundColor: P.bg }}>
+      <StatusBar style="dark" />
 
-      <View style={[styles.header, { paddingTop: topInset + 12 }]}>
-        <Text style={styles.headerTitle}>Library</Text>
+      {/* Header */}
+      <View style={{ paddingTop: topInset + 16, paddingHorizontal: 20, paddingBottom: 16 }}>
+        <Text style={{ fontSize: 30, fontWeight: "900", color: P.text, letterSpacing: -1 }}>Library</Text>
       </View>
 
-      <View style={styles.statsRow}>
-        {([
-          { num: songs.length, label: "Songs", icon: "music-note" as MIName },
-          { num: playlists.length, label: "Playlists", icon: "queue-music" as MIName },
-          { num: favCount, label: "Favourites", icon: "favorite" as MIName },
-          { num: totalLocal, label: "On Device", icon: "phone-android" as MIName },
-        ]).map((s) => (
-          <BlurView key={s.label} intensity={20} tint={c.tint} style={styles.statCard}>
-            <MaterialIcons name={s.icon} size={14} color={LIME} style={{ marginBottom: 2 }} />
+      {/* Stats */}
+      <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 8, marginBottom: 20 }}>
+        {STAT_ITEMS.map((s) => (
+          <View key={s.label} style={styles.statCard}>
+            <View style={styles.statIconWrap}>
+              <MaterialIcons name={s.icon} size={14} color={P.red} />
+            </View>
             <Text style={styles.statNum}>{s.num}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
-          </BlurView>
+            <Text style={styles.statLabel}>{s.label.toUpperCase()}</Text>
+          </View>
         ))}
       </View>
 
-      <View style={styles.tabBar}>
-        {TABS.map(t => (
-          <Pressable key={t} style={styles.tabBarItem} onPress={() => setTab(t)}>
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{t}</Text>
-            {tab === t && <View style={styles.tabUnderline} />}
-          </Pressable>
-        ))}
+      {/* Tab bar — underline style matching Home */}
+      <View style={{ marginBottom: 16 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, gap: 28, flexDirection: "row", alignItems: "flex-end" }}
+        >
+          {TABS.map(t => {
+            const active = tab === t;
+            return (
+              <Pressable key={t} onPress={() => setTab(t)} style={{ paddingBottom: 10, alignItems: "center" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <MaterialIcons name={TAB_ICONS[t]} size={13} color={active ? P.text : P.sub} />
+                  <Text style={[styles.tabText, active && styles.tabTextActive]}>{t}</Text>
+                </View>
+                {active && <View style={styles.tabUnderline} />}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <View style={{ height: 1, backgroundColor: P.border, marginTop: -1 }} />
       </View>
 
+      {/* Content */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: bottomInset + 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={LIME} colors={[LIME]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.red} colors={[P.red]} />}
       >
+        {/* Playlists tab */}
         {tab === "Playlists" && (
           <View style={{ paddingHorizontal: 16 }}>
             {showCreate ? (
-              <View style={styles.createRow}>
-                <TextInput autoFocus value={newName} onChangeText={setNewName} placeholder="Playlist name…" placeholderTextColor={c.muted} style={styles.createInput} onSubmitEditing={handleCreatePlaylist} returnKeyType="done" />
-                <Pressable onPress={handleCreatePlaylist} disabled={!newName.trim() || creating} style={({ pressed }) => [styles.createOk, pressed && { opacity: 0.7 }, (!newName.trim() || creating) && { opacity: 0.5 }]}>
-                  <Text style={styles.createOkText}>{creating ? "…" : "Create"}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <TextInput
+                  autoFocus
+                  value={newName}
+                  onChangeText={setNewName}
+                  placeholder="Playlist name…"
+                  placeholderTextColor={P.sub}
+                  style={{ flex: 1, height: 46, paddingHorizontal: 14, backgroundColor: P.surface, borderRadius: 14, borderWidth: 1, borderColor: P.border, color: P.text, fontSize: 14 }}
+                  onSubmitEditing={handleCreatePlaylist}
+                  returnKeyType="done"
+                />
+                <Pressable
+                  onPress={handleCreatePlaylist}
+                  disabled={!newName.trim() || creating}
+                  style={({ pressed }) => [{ height: 46, paddingHorizontal: 16, borderRadius: 14, backgroundColor: P.red, alignItems: "center", justifyContent: "center" }, pressed && { opacity: 0.8 }, (!newName.trim() || creating) && { opacity: 0.5 }]}
+                >
+                  <Text style={{ fontWeight: "800", color: "#fff", fontSize: 14 }}>{creating ? "…" : "Create"}</Text>
                 </Pressable>
                 <Pressable onPress={() => { setShowCreate(false); setNewName(""); }} style={{ padding: 10 }}>
-                  <MaterialIcons name="close" size={18} color={c.muted} />
+                  <MaterialIcons name="close" size={18} color={P.sub} />
                 </Pressable>
               </View>
             ) : (
-              <Pressable onPress={() => setShowCreate(true)} style={({ pressed }) => [styles.newPlaylistBtn, pressed && { opacity: 0.7 }]}>
-                <MaterialIcons name="add" size={20} color={LIME} />
+              <Pressable
+                onPress={() => setShowCreate(true)}
+                style={({ pressed }) => [styles.newPlaylistBtn, pressed && { opacity: 0.8 }]}
+              >
+                <View style={styles.newPlaylistIcon}>
+                  <MaterialIcons name="add" size={20} color="#fff" />
+                </View>
                 <Text style={styles.newPlaylistText}>New Playlist</Text>
               </Pressable>
             )}
@@ -270,19 +369,21 @@ export default function LibraryScreen() {
           </View>
         )}
 
+        {/* Recent tab */}
         {tab === "Recent" && (
           recent.length > 0
-            ? <View style={styles.songList}>{recent.map((s, i) => <SongRow key={s._id ?? String(i)} song={s} index={i} queue={recent} onAdd={setSheetSong} />)}</View>
-            : <EmptyState icon="music-note" title="No songs yet" text="Songs you play will appear here." />
+            ? <View style={{ paddingHorizontal: 16 }}>{recent.map((s, i) => <SongRow key={s._id ?? String(i)} song={s} index={i} queue={recent} onAdd={setSheetSong} />)}</View>
+            : <EmptyState icon="history" title="No songs yet" text="Songs you play will appear here." />
         )}
 
+        {/* Albums tab */}
         {tab === "Albums" && (
           albums.length > 0
-            ? <View style={styles.albumGrid}>
+            ? <View style={{ paddingHorizontal: 16 }}>
                 {albums.map((a, i) => {
                   if (i % 2 !== 0) return null;
                   return (
-                    <View key={a._id ?? String(i)} style={styles.albumRow}>
+                    <View key={a._id ?? String(i)} style={{ flexDirection: "row", gap: 14, marginBottom: 16 }}>
                       <AlbumCard album={a} />
                       {albums[i + 1] ? <AlbumCard album={albums[i + 1]} /> : <View style={{ flex: 1 }} />}
                     </View>
@@ -292,34 +393,11 @@ export default function LibraryScreen() {
             : <EmptyState icon="album" title="No albums" text="Albums will appear here once added." />
         )}
 
+        {/* Favourites tab */}
         {tab === "Favourites" && (
           favSongs.length > 0
-            ? <View style={styles.songList}>{favSongs.map((s, i) => <SongRow key={s._id ?? String(i)} song={s} index={i} queue={favSongs} onAdd={setSheetSong} />)}</View>
+            ? <View style={{ paddingHorizontal: 16 }}>{favSongs.map((s, i) => <SongRow key={s._id ?? String(i)} song={s} index={i} queue={favSongs} onAdd={setSheetSong} />)}</View>
             : <EmptyState icon="favorite-border" title="No favourites yet" text="Tap the heart on any song to save it here." />
-        )}
-
-        {tab === "On Device" && (
-          <View style={{ paddingHorizontal: 16 }}>
-            {!isOnline && (
-              <View style={styles.offlineBadge}>
-                <MaterialIcons name="wifi-off" size={14} color="#000" />
-                <Text style={styles.offlineBadgeText}>Offline mode · playing from device</Text>
-              </View>
-            )}
-            {permissionStatus !== "granted" ? (
-              <View style={styles.emptyState}>
-                <MaterialIcons name="folder" size={52} color={c.muted} style={{ marginBottom: 16 }} />
-                <Text style={styles.emptyTitle}>Storage Access Required</Text>
-                <Text style={styles.emptyText}>Allow Muves to read your music files to play songs stored on your device.</Text>
-                <Pressable style={({ pressed }) => [styles.permBtn, pressed && { opacity: 0.8 }]} onPress={requestPermission}>
-                  <Text style={styles.permBtnText}>Allow Access</Text>
-                </Pressable>
-              </View>
-            ) : localSongs.length > 0
-              ? localSongs.map((s, i) => <SongRow key={s._id ?? String(i)} song={s} index={i} queue={localSongs} onAdd={setSheetSong} />)
-              : <EmptyState icon="music-off" title="No audio files found" text="No music files were found on your device storage." />
-            }
-          </View>
         )}
       </ScrollView>
 
@@ -328,42 +406,34 @@ export default function LibraryScreen() {
   );
 }
 
-function makeStyles(c: Colors) {
-  return StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.bg },
-    header: { paddingHorizontal: 20, paddingBottom: 16 },
-    headerTitle: { fontSize: 28, fontWeight: "800", color: c.text },
+const styles = StyleSheet.create({
+  statCard: {
+    flex: 1, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 6,
+    alignItems: "center", gap: 3,
+    backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,
+  },
+  statIconWrap: {
+    width: 30, height: 30, borderRadius: 9,
+    backgroundColor: P.redLight, alignItems: "center", justifyContent: "center", marginBottom: 4,
+  },
+  statNum: { fontSize: 20, fontWeight: "900", color: P.text, letterSpacing: -0.5 },
+  statLabel: { fontSize: 9, color: P.sub, fontWeight: "700", letterSpacing: 0.4 },
 
-    statsRow: { flexDirection: "row", paddingHorizontal: 20, gap: 8, marginBottom: 14 },
-    statCard: { flex: 1, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 6, alignItems: "center", overflow: "hidden", borderWidth: 1, borderColor: c.cardBorder },
-    statNum: { fontSize: 15, fontWeight: "800", color: LIME },
-    statLabel: { fontSize: 10, color: c.muted, marginTop: 1, fontWeight: "600" },
+  tabText: { fontSize: 14, fontWeight: "600", color: P.sub },
+  tabTextActive: { color: P.text, fontWeight: "800" },
+  tabUnderline: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    height: 2.5, borderRadius: 2, backgroundColor: P.red,
+  },
 
-    tabBar: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: c.cardBorder, marginBottom: 16 },
-    tabBarItem: { flex: 1, alignItems: "center", paddingVertical: 12, position: "relative" },
-    tabUnderline: { position: "absolute", bottom: 0, left: "15%", right: "15%", height: 2, borderRadius: 2, backgroundColor: LIME },
-    tabText: { fontSize: 13, fontWeight: "700", color: c.muted },
-    tabTextActive: { color: c.text },
-
-    newPlaylistBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, marginBottom: 12, borderWidth: 1, borderStyle: "dashed", borderColor: LIME },
-    newPlaylistText: { fontSize: 15, fontWeight: "700", color: LIME },
-    createRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-    createInput: { flex: 1, height: 46, paddingHorizontal: 14, backgroundColor: c.inputBg, borderRadius: 12, borderWidth: 1, borderColor: LIME, color: c.text, fontSize: 14 },
-    createOk: { height: 46, paddingHorizontal: 16, borderRadius: 12, backgroundColor: LIME, alignItems: "center", justifyContent: "center" },
-    createOkText: { fontWeight: "800", color: "#000", fontSize: 14 },
-
-    songList: { paddingHorizontal: 16 },
-    albumGrid: { paddingHorizontal: 16 },
-    albumRow: { flexDirection: "row", gap: 14, marginBottom: 16 },
-
-    offlineBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: LIME, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 14, alignSelf: "flex-start" },
-    offlineBadgeText: { fontSize: 12, fontWeight: "700", color: "#000" },
-
-    permBtn: { marginTop: 20, backgroundColor: LIME, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 28 },
-    permBtnText: { fontWeight: "800", color: "#000", fontSize: 14 },
-
-    emptyState: { alignItems: "center", paddingTop: 70, paddingHorizontal: 40 },
-    emptyTitle: { fontSize: 18, fontWeight: "700", color: c.text, marginBottom: 8 },
-    emptyText: { fontSize: 14, color: c.muted, textAlign: "center", lineHeight: 22 },
-  });
-}
+  newPlaylistBtn: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 16, borderRadius: 16, marginBottom: 14,
+    backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,
+  },
+  newPlaylistIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: P.red, alignItems: "center", justifyContent: "center",
+  },
+  newPlaylistText: { fontSize: 15, fontWeight: "800", color: P.text },
+});
